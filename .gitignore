@@ -61,3 +61,6 @@ ehthumbs.db
 .env
 
 .claude
+
+# Vector Store
+*.faiss

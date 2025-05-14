@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = None
     
     # Google Vertex AI settings (opzionale)
-    GOOGLE_PROJECT_ID: str = None
-    GOOGLE_LOCATION: str = "us-central1"
+    # GOOGLE_PROJECT_ID: str = None
+    # GOOGLE_LOCATION: str = "us-central1"
     
     # Vector store settings
     VECTOR_STORE_PATH: str = "./vector_store.faiss"
