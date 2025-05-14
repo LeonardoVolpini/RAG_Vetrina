@@ -1,23 +1,62 @@
 from .config import settings
 from langchain_openai import OpenAIEmbeddings
-from langchain_google_vertexai import VertexAIEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_core.embeddings import Embeddings
+import google.generativeai as genai
 import os
+
+class GeminiEmbeddings(Embeddings):
+    """Classe personalizzata per utilizzare gli embeddings di Google Generative AI"""
+    
+    def __init__(self, api_key=None):
+        """Inizializza con l'API key di Gemini"""
+        self.api_key = api_key or settings.GEMINI_API_KEY
+        genai.configure(api_key=self.api_key)
+        
+    def embed_documents(self, texts):
+        """Genera embedding per una lista di testi"""
+        embeddings = []
+        for text in texts:
+            result = genai.embed_content(
+                model="models/embedding-001",
+                content=text,
+                task_type="retrieval_document"
+            )
+            embeddings.append(result["embedding"])
+        return embeddings
+        
+    def embed_query(self, text):
+        """Genera embedding per una query singola"""
+        result = genai.embed_content(
+            model="models/embedding-001",
+            content=text,
+            task_type="retrieval_query"
+        )
+        return result["embedding"]
 
 def get_embeddings(provider='openai'):
     """
     Restituisce un oggetto embeddings in base al provider scelto.
-    Supporta OpenAI e Google Vertex AI (per Gemini).
+    Supporta OpenAI e Google Generative AI (per Gemini).
     """
     if provider == 'openai':
         return OpenAIEmbeddings(openai_api_key=settings.OPENAI_API_KEY)
     elif provider == 'gemini':
-        # Usa VertexAI Embeddings per Gemini
-        return VertexAIEmbeddings(
-            project=settings.GOOGLE_PROJECT_ID,
-            location=settings.GOOGLE_LOCATION,
-            credentials=settings.GOOGLE_CREDENTIALS
-        )
+        # Controlla se sono disponibili le credenziali Vertex AI
+        if settings.GOOGLE_PROJECT_ID and settings.GOOGLE_LOCATION:
+            try:
+                from langchain_google_vertexai import VertexAIEmbeddings
+                return VertexAIEmbeddings(
+                    model_name="textembedding-gecko@latest",
+                    project=settings.GOOGLE_PROJECT_ID,
+                    location=settings.GOOGLE_LOCATION
+                )
+            except (ImportError, Exception) as e:
+                print(f"Errore nell'utilizzo di VertexAIEmbeddings: {e}")
+                print("Fallback su GeminiEmbeddings...")
+        
+        # Fallback su Gemini API diretta
+        return GeminiEmbeddings()
     else:
         raise ValueError(f"Provider embedding non supportato: {provider}")
 

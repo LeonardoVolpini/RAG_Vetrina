@@ -3,9 +3,7 @@ from .config import settings
 
 # import LLM wrappers
 from langchain_openai import OpenAI
-from langchain_google_vertexai import VertexAI
 import google.generativeai as genai
-import os
 
 def get_llm(provider: str, model_name: str):
     """
@@ -15,30 +13,31 @@ def get_llm(provider: str, model_name: str):
     if provider == 'openai':
         return OpenAI(model_name=model_name, openai_api_key=settings.OPENAI_API_KEY)
     elif provider == 'gemini':
-        if settings.GOOGLE_CREDENTIALS:
-            # Usa Vertex AI se sono disponibili le credenziali complete
-            return VertexAI(
-                model_name=model_name,
-                project=settings.GOOGLE_PROJECT_ID,
-                location=settings.GOOGLE_LOCATION,
-                credentials=settings.GOOGLE_CREDENTIALS
-            )
-        else:
-            # Usa l'API Gemini con solo API key
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            
-            # wrapper minimale per LangChain-like interface
-            class GeminiLLM:
-                def __init__(self, model_name):
-                    self.model = genai.GenerativeModel(model_name)
+        # Configura l'API Gemini con la chiave
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        
+        # Wrapper per l'interfaccia LangChain
+        class GeminiLLM:
+            def __init__(self, model_name="gemini-pro"):
+                self.model = genai.GenerativeModel(model_name)
                 
-                def __call__(self, prompt: str) -> str:
+            def __call__(self, prompt: str) -> str:
+                try:
                     response = self.model.generate_content(prompt)
-                    return response.text
-            
-            return GeminiLLM(model_name)
+                    # Gestisce diversi tipi di risposta possibili
+                    if hasattr(response, 'text'):
+                        return response.text
+                    elif hasattr(response, 'parts'):
+                        return ''.join(part.text for part in response.parts)
+                    else:
+                        return str(response)
+                except Exception as e:
+                    print(f"Errore nella generazione con Gemini: {e}")
+                    return f"Errore nel processare la richiesta: {str(e)}"
+        
+        return GeminiLLM(model_name=model_name or "gemini-pro")
     else:
-        raise ValueError("Provider LLM non valido")
+        raise ValueError(f"Provider LLM non valido: {provider}")
 
 
 def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo'):
