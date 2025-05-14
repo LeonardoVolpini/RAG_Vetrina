@@ -15,10 +15,11 @@ distro==1.9.0
 docstring_parser==0.16
 faiss-cpu==1.11.0
 fastapi==0.115.12
+filetype==1.2.0
 frozenlist==1.6.0
 gitdb==4.0.12
 GitPython==3.1.44
-google-ai-generativelanguage==0.6.15
+google-ai-generativelanguage==0.6.18
 google-api-core==2.24.2
 google-api-python-client==2.169.0
 google-auth==2.40.1
@@ -50,6 +51,7 @@ langchain==0.3.25
 langchain-cli==0.0.36
 langchain-community==0.3.24
 langchain-core==0.3.59
+langchain-google-genai==2.1.4
 langchain-google-vertexai==2.0.23
 langchain-openai==0.3.16
 langchain-text-splitters==0.3.8

@@ -3,7 +3,7 @@ from .config import settings
 
 # import LLM wrappers
 from langchain_openai import OpenAI
-import google.generativeai as genai
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 def get_llm(provider: str, model_name: str):
     """
@@ -13,29 +13,12 @@ def get_llm(provider: str, model_name: str):
     if provider == 'openai':
         return OpenAI(model_name=model_name, openai_api_key=settings.OPENAI_API_KEY)
     elif provider == 'gemini':
-        # Configura l'API Gemini con la chiave
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        # Wrapper per l'interfaccia LangChain
-        class GeminiLLM:
-            def __init__(self, model_name="gemini-pro"):
-                self.model = genai.GenerativeModel(model_name)
-                
-            def __call__(self, prompt: str) -> str:
-                try:
-                    response = self.model.generate_content(prompt)
-                    # Gestisce diversi tipi di risposta possibili
-                    if hasattr(response, 'text'):
-                        return response.text
-                    elif hasattr(response, 'parts'):
-                        return ''.join(part.text for part in response.parts)
-                    else:
-                        return str(response)
-                except Exception as e:
-                    print(f"Errore nella generazione con Gemini: {e}")
-                    return f"Errore nel processare la richiesta: {str(e)}"
-        
-        return GeminiLLM(model_name=model_name or "gemini-pro")
+        # Usa l'integrazione ufficiale di LangChain per Google Generative AI
+        return ChatGoogleGenerativeAI(
+            model=model_name or "gemini-pro",
+            google_api_key=settings.GEMINI_API_KEY,
+            temperature=0.7,
+        )
     else:
         raise ValueError(f"Provider LLM non valido: {provider}")
 
