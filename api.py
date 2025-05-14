@@ -22,7 +22,7 @@ async def ingest(request: IngestRequest):
     global _store, _current_provider, _current_model
     _current_provider = request.provider
     _current_model = request.model_name or ('gemini-pro' if request.provider == 'gemini' else 'gpt-3.5-turbo')
-    _store = ingest_pdfs(request.pdf_paths, rebuild_index=request.rebuild_index)
+    _store = ingest_pdfs(request.pdf_paths, rebuild_index=request.rebuild_index, provider=_current_provider)
     return {"status": "index built", "pdf_count": len(request.pdf_paths)}
 
 @app.post('/ask/')

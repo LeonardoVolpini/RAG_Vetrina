@@ -13,13 +13,4 @@ rag_project/
 │   ├── retrieval.py      # costruzione del retriever + QA chain
 │   └── generate.py        # generazione risposte RAG
 └── api.py                # FastAPI esporre endpoint RAG per NodeJS (ingest + ask)
-
-Requisiti (pip):
-- langchain
-- openai
-- faiss-cpu
-- pypdf
-- fastapi
-- uvicorn
-- pydantic
 '''

@@ -1,11 +1,11 @@
 from langchain.chains import RetrievalQA
-from .embeddings import get_vector_store
 from .config import settings
 
 # import LLM wrappers
-from langchain_community.llms import OpenAI
-from google import genai
-
+from langchain_openai import OpenAI
+from langchain_google_vertexai import VertexAI
+import google.generativeai as genai
+import os
 
 def get_llm(provider: str, model_name: str):
     """
@@ -15,30 +15,36 @@ def get_llm(provider: str, model_name: str):
     if provider == 'openai':
         return OpenAI(model_name=model_name, openai_api_key=settings.OPENAI_API_KEY)
     elif provider == 'gemini':
-        # google-genai client
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        # wrapper minimale per LangChain-like interface
-        class GeminiLLM:
-            def __init__(self, client, model):
-                self.client = client
-                self.model = model
-            def __call__(self, prompt: str) -> str:
-                response = self.client.generate_text(model=self.model, prompt=prompt)
-                return response.text
-        return GeminiLLM(client, model_name)
+        if settings.GOOGLE_CREDENTIALS:
+            # Usa Vertex AI se sono disponibili le credenziali complete
+            return VertexAI(
+                model_name=model_name,
+                project=settings.GOOGLE_PROJECT_ID,
+                location=settings.GOOGLE_LOCATION,
+                credentials=settings.GOOGLE_CREDENTIALS
+            )
+        else:
+            # Usa l'API Gemini con solo API key
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            
+            # wrapper minimale per LangChain-like interface
+            class GeminiLLM:
+                def __init__(self, model_name):
+                    self.model = genai.GenerativeModel(model_name)
+                
+                def __call__(self, prompt: str) -> str:
+                    response = self.model.generate_content(prompt)
+                    return response.text
+            
+            return GeminiLLM(model_name)
     else:
         raise ValueError("Provider LLM non valido")
 
 
-def build_rag_chain(pdf_paths: list[str], provider: str = 'openai', model_name: str = 'gpt-3.5-turbo', rebuild_index: bool = False):
+def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo'):
     """
-    1. Carica PDF
-    2. Costruisci/carica FAISS
-    3. Costruisci RetrievalQA usando il provider scelto
+    Costruisce un RetrievalQA chain usando il vectorstore fornito e il provider scelto
     """
-    from .loader import load_pdfs
-    docs = load_pdfs(pdf_paths)
-    store = get_vector_store(docs, rebuild=rebuild_index)
     retriever = store.as_retriever(search_kwargs={"k": 4})
     llm = get_llm(provider, model_name)
     return RetrievalQA.from_chain_type(

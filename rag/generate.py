@@ -3,12 +3,12 @@ from .embeddings import get_vector_store
 from .retrieval import build_rag_chain
 
 
-def ingest_pdfs(pdf_paths: list[str], rebuild_index: bool = False):
+def ingest_pdfs(pdf_paths: list[str], rebuild_index: bool = False, provider: str = 'openai'):
     """
     Funzione per ingest: carica PDF, crea/carica indice FAISS e restituisce store e chain.
     """
     docs = load_pdfs(pdf_paths)
-    store = get_vector_store(docs, rebuild=rebuild_index)
+    store = get_vector_store(docs, rebuild=rebuild_index, provider=provider)
     return store
 
 
