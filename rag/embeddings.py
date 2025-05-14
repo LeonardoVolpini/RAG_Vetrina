@@ -42,20 +42,6 @@ def get_embeddings(provider='openai'):
     if provider == 'openai':
         return OpenAIEmbeddings(openai_api_key=settings.OPENAI_API_KEY)
     elif provider == 'gemini':
-        # Controlla se sono disponibili le credenziali Vertex AI
-        if settings.GOOGLE_PROJECT_ID and settings.GOOGLE_LOCATION:
-            try:
-                from langchain_google_vertexai import VertexAIEmbeddings
-                return VertexAIEmbeddings(
-                    model_name="textembedding-gecko@latest",
-                    project=settings.GOOGLE_PROJECT_ID,
-                    location=settings.GOOGLE_LOCATION
-                )
-            except (ImportError, Exception) as e:
-                print(f"Errore nell'utilizzo di VertexAIEmbeddings: {e}")
-                print("Fallback su GeminiEmbeddings...")
-        
-        # Fallback su Gemini API diretta
         return GeminiEmbeddings()
     else:
         raise ValueError(f"Provider embedding non supportato: {provider}")
