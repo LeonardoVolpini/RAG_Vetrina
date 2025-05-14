@@ -15,7 +15,7 @@ def get_llm(provider: str, model_name: str):
     elif provider == 'gemini':
         # Usa l'integrazione ufficiale di LangChain per Google Generative AI
         return ChatGoogleGenerativeAI(
-            model=model_name or "gemini-pro",
+            model=model_name or "models/gemini-1.5-pro-latest",
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.7,
         )
@@ -35,3 +35,16 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
         retriever=retriever,
         return_source_documents=True
     )
+
+def supported_gemini_models():
+    """
+    Restituisce i modelli supportati da Gemini.
+    """
+    from .config import settings
+    import google.generativeai as genai
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    models = genai.list_models()
+    for m in models:
+        if "generateContent" in m.supported_generation_methods:
+            print(f"Model: {m.name}, metodi: {m.supported_generation_methods}")
+    return models
