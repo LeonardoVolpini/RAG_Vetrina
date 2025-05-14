@@ -17,7 +17,7 @@ def ask_query(query: str, store, provider: str, model_name: str):
     Esegue query RAG su indice già caricato.
     """
     rag_chain = build_rag_chain(store, provider, model_name)
-    output = rag_chain(query)
+    output = rag_chain.invoke(query)
     sources = [{
         "page": d.metadata.get('page'),
         "source_pdf": d.metadata.get('source_pdf')
