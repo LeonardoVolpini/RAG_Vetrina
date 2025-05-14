@@ -15,7 +15,7 @@ def get_llm(provider: str, model_name: str):
     elif provider == 'gemini':
         # Usa l'integrazione ufficiale di LangChain per Google Generative AI
         return ChatGoogleGenerativeAI(
-            model=model_name or "models/gemini-1.5-pro-latest",
+            model=model_name or "models/gemini-1.5-flash-latest",
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.7,
         )
@@ -25,15 +25,48 @@ def get_llm(provider: str, model_name: str):
 
 def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo'):
     """
-    Costruisce un RetrievalQA chain usando il vectorstore fornito e il provider scelto
+    Costruisce un RetrievalQA chain ottimizzato per il dominio dell'edilizia
     """
-    retriever = store.as_retriever(search_kwargs={"k": 4})
+    # MMR retriever per migliore diversità nei risultati
+    retriever = store.as_retriever(
+        search_type="mmr",  # Maximum Marginal Relevance per diversità
+        search_kwargs={
+            "k": 6,         # Recupera più documenti
+            "fetch_k": 20,  # Considera più candidati
+            "lambda_mult": 0.7  # Bilancia rilevanza e diversità
+        }
+    )
+    
     llm = get_llm(provider, model_name)
+    
+    # Usa un prompt personalizzato specifico per edilizia
+    from langchain.prompts import PromptTemplate
+    
+    template = """Sei un assistente esperto nel settore dell'edilizia. 
+    Utilizza le seguenti informazioni per rispondere alla domanda dell'utente.
+    
+    Considera sempre il contesto italiano nelle tue risposte.
+    Se la domanda riguarda normative, assicurati di specificare se si tratta di normative nazionali o locali.
+    Se non conosci la risposta, dì semplicemente che non lo sai, non inventare.
+    
+    Contesto:
+    {context}
+    
+    Domanda: {question}
+    
+    Risposta dettagliata:"""
+    
+    prompt = PromptTemplate(
+        template=template,
+        input_variables=["context", "question"]
+    )
+    
     return RetrievalQA.from_chain_type(
         llm=llm,
-        chain_type="stuff",
+        chain_type="stuff",  # Per documenti di edilizia, "stuff" funziona bene con i chunks corretti
         retriever=retriever,
-        return_source_documents=True
+        return_source_documents=True,
+        chain_type_kwargs={"prompt": prompt}
     )
 
 def supported_gemini_models():
