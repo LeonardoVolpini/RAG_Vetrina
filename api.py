@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional
-from rag.generate import ingest_pdfs, ask_query
+from rag.generate import ingest_documents, ask_query
 from rag.vector_store_singleton import VectorStoreSingleton
 from rag.cache import ResponseCache
 import requests
@@ -9,12 +9,17 @@ import requests
 app = FastAPI()
 response_cache = ResponseCache.get_instance(max_size=500, ttl=1800)  # Cache di 30 minuti
 
+class CSVOptions(BaseModel):
+    header_row: int = 0
+    include_columns: Optional[List[str]] = None
+
 class IngestRequest(BaseModel):
-    pdf_paths: List[str]
+    file_paths: List[str]
     provider: Optional[str] = 'openai'
     model_name: Optional[str] = None
     rebuild_index: bool = False
     callback_url: Optional[str] = None
+    csv_options: Optional[CSVOptions] = None
 
 class AskRequest(BaseModel):
     query: str
@@ -30,21 +35,35 @@ async def startup_event():
 
 @app.post('/ingest/')
 async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
-    """Endpoint per l'ingest dei PDF"""
+    """Endpoint per l'ingest dei documenti (PDF e CSV/Excel)"""
     vector_store = VectorStoreSingleton.get_instance()
     
     # Funzione per eseguire l'ingest in background
     def do_ingest():
-        store = ingest_pdfs(request.pdf_paths,
-                            rebuild_index=request.rebuild_index,
-                            provider=request.provider)
+        csv_options_dict = request.csv_options.dict() if request.csv_options else {}
+        store = ingest_documents(
+            file_paths=request.file_paths,
+            rebuild_index=request.rebuild_index,
+            provider=request.provider,
+            csv_options=csv_options_dict
+        )
         vector_store.set_store(store)
-        print("Ingestione completata:", len(request.pdf_paths), "PDF elaborati.")   # TODO: avvisare utente via callback_url
+        print("Ingestione completata:", len(request.file_paths), "documenti elaborati.")
+        
+        # Invia notifica al callback_url se specificato     TODO non funziona
+        if request.callback_url:
+            try:
+                requests.post(
+                    request.callback_url, 
+                    json={"status": "complete", "file_count": len(request.file_paths)}
+                )
+            except Exception as e:
+                print(f"Errore nell'invio della notifica callback: {str(e)}")
     
     # Se rebuild o non inizializzato, esegui in background
     if request.rebuild_index or not vector_store.is_initialized():
         background_tasks.add_task(do_ingest)
-        return {"status": "ingestion started", "pdf_count": len(request.pdf_paths)}
+        return {"status": "ingestion started", "file_count": len(request.file_paths)}
     else:
         return {"status": "index already exists", "message": "Use rebuild_index=true to rebuild"}
 
@@ -74,6 +93,26 @@ async def ask(request: AskRequest):
         response_cache.set(request.query, provider, model, result)
     
     return result
+
+@app.get('/info/')
+async def get_info():
+    """Endpoint per ottenere informazioni sul sistema RAG"""
+    vector_store = VectorStoreSingleton.get_instance()
+    store = vector_store.get_store()
+    
+    info = {
+        "is_initialized": vector_store.is_initialized(),
+        "supported_file_types": ["pdf", "csv", "xlsx", "xls"],
+        "provider": vector_store._provider,
+    }
+    
+    # Se lo store è inizializzato, aggiungi dettagli
+    if store:
+        # FAISS non espone questa informazione direttamente, quindi dobbiamo usare l'indice docstore interno
+        doc_count = len(store.index_to_docstore_id) if hasattr(store, 'index_to_docstore_id') else "unknown"
+        info["document_count"] = doc_count
+    
+    return info
 
 if __name__ == "__main__":
     import uvicorn
