@@ -47,7 +47,8 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
     
     Considera sempre il contesto italiano nelle tue risposte.
     Se la domanda riguarda normative, assicurati di specificare se si tratta di normative nazionali o locali.
-    Se non conosci la risposta, dì semplicemente che non lo sai, non inventare.
+    Se non conosci la risposta, dì semplicemente che non lo sai, non inventare ed in questo caso inizia la rispostacon "Non lo so".
+    Non utilizzare grassetto o corsivo o altre formattazioni tipiche di markdown.
     
     Contesto:
     {context}
