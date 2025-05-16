@@ -13,7 +13,7 @@ def load_pdfs(pdf_paths: list[str]) -> list[Document]:
     # Chunks più grandi per catturare contesto completo di normative/specifiche
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1200,       # Chunks più grandi per mantenere il contesto delle normative
-        chunk_overlap=250,     # Overlap maggiore per non perdere informazioni tra chunks
+        chunk_overlap=350,     # Overlap maggiore per non perdere informazioni tra chunks
         length_function=len,
         separators=["\n\n", "\n", " ", ""]  # Priorità di divisione su paragrafi
     )

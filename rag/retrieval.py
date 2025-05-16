@@ -17,7 +17,7 @@ def get_llm(provider: str, model_name: str):
         return ChatGoogleGenerativeAI(
             model=model_name or "models/gemini-1.5-flash-latest",
             google_api_key=settings.GEMINI_API_KEY,
-            temperature=0.7,
+            temperature=0.9,
         )
     else:
         raise ValueError(f"Provider LLM non valido: {provider}")
@@ -31,9 +31,9 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
     retriever = store.as_retriever(
         search_type="mmr",  # Maximum Marginal Relevance per diversità
         search_kwargs={
-            "k": 6,         # Recupera più documenti
-            "fetch_k": 20,  # Considera più candidati
-            "lambda_mult": 0.7  # Bilancia rilevanza e diversità
+            "k": 8,         # Recupera più documenti
+            "fetch_k": 25,  # Considera più candidati
+            "lambda_mult": 0.9  # Bilancia rilevanza e diversità
         }
     )
     
