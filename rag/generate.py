@@ -1,9 +1,11 @@
 from .loader_pdf import load_pdfs
 from .loader_csv import load_csv
-from .embeddings import get_vector_store
+from .embeddings import get_embeddings
 from .retrieval import build_rag_chain
+from .config import settings
 import os
 from typing import List, Dict, Any, Optional
+from langchain_community.vectorstores import FAISS
 
 def get_file_type(file_path: str) -> str:
     """Determina il tipo di file in base all'estensione"""
@@ -20,6 +22,7 @@ def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provide
                      csv_options: Optional[Dict[str, Any]] = None) -> Any:
     """
     Funzione unificata per ingest: carica PDF e CSV, crea/carica indice FAISS e restituisce store.
+    Supporta sia la ricostruzione completa che l'aggiunta incrementale di documenti.
     
     Args:
         file_paths: Lista di percorsi ai file
@@ -53,12 +56,36 @@ def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provide
         elif file_type == 'unknown':
             print(f"Tipo di file non supportato: {path}")
     
-    # Crea o carica vector store con tutti i documenti
-    if docs:
-        store = get_vector_store(docs, rebuild=rebuild_index, provider=provider)
+    # Ottieni gli embeddings una sola volta per riuso
+    embeddings = get_embeddings(provider)
+    
+    # Controlla se ci sono documenti da elaborare
+    if not docs:
+        raise ValueError("Nessun documento valido caricato per l'ingestione.")
+    
+    # Gestione dell'indice FAISS
+    if rebuild_index or not os.path.exists(settings.VECTOR_STORE_PATH):
+        # Crea un nuovo indice con i documenti caricati
+        print(f"Creazione di un nuovo indice con {len(docs)} documenti")
+        store = FAISS.from_documents(docs, embeddings)
+        store.save_local(settings.VECTOR_STORE_PATH)
         return store
     else:
-        raise ValueError("Nessun documento valido caricato per l'ingestione.")
+       # Aggiunta incrementale a un indice esistente
+        print(f"Aggiunta di {len(docs)} nuovi documenti all'indice esistente")
+        # Carica l'indice esistente con allow_dangerous_deserialization=True
+        store = FAISS.load_local(
+            settings.VECTOR_STORE_PATH, 
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+        
+        # Aggiungi i nuovi documenti all'indice
+        store.add_documents(docs)
+        
+        # Salva l'indice aggiornato
+        store.save_local(settings.VECTOR_STORE_PATH)
+        return store
 
 def ask_query(query: str, store, provider: str, model_name: str):
     """

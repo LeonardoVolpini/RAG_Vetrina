@@ -60,12 +60,15 @@ async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
             except Exception as e:
                 print(f"Errore nell'invio della notifica callback: {str(e)}")
     
-    # Se rebuild o non inizializzato, esegui in background
-    if request.rebuild_index or not vector_store.is_initialized():
-        background_tasks.add_task(do_ingest)
-        return {"status": "ingestion started", "file_count": len(request.file_paths)}
+    # Esegui sempre in background, sia per rebuild che per aggiunta incrementale
+    background_tasks.add_task(do_ingest)
+    
+    if not vector_store.is_initialized() :
+        return {"status": "creating new index", "file_count": len(request.file_paths)}
+    elif request.rebuild_index:
+        return {"status": "rebuilding index", "file_count": len(request.file_paths)}
     else:
-        return {"status": "index already exists", "message": "Use rebuild_index=true to rebuild"}
+        return {"status": "adding to existing index", "file_count": len(request.file_paths)}
 
 @app.post('/ask/')
 async def ask(request: AskRequest):
