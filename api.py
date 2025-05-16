@@ -15,7 +15,7 @@ class CSVOptions(BaseModel):
 
 class IngestRequest(BaseModel):
     file_paths: List[str]
-    provider: Optional[str] = 'openai'
+    provider: Optional[str] = 'openai'  # 'openai', 'gemini', o 'llama'
     model_name: Optional[str] = None
     rebuild_index: bool = False
     callback_url: Optional[str] = None
@@ -23,7 +23,7 @@ class IngestRequest(BaseModel):
 
 class AskRequest(BaseModel):
     query: str
-    provider: Optional[str] = 'openai'
+    provider: Optional[str] = 'openai'  # 'openai', 'gemini', o 'llama'
     model_name: Optional[str] = None
     use_cache: bool = True
 
@@ -36,6 +36,10 @@ async def startup_event():
 @app.post('/ingest/')
 async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
     """Endpoint per l'ingest dei documenti (PDF e CSV/Excel)"""
+    # Validazione del provider
+    if request.provider not in ['openai', 'gemini', 'llama']:
+        raise HTTPException(status_code=400, detail=f"Provider non supportato: {request.provider}")
+    
     vector_store = VectorStoreSingleton.get_instance()
     
     # Funzione per eseguire l'ingest in background
@@ -73,13 +77,24 @@ async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
 @app.post('/ask/')
 async def ask(request: AskRequest):
     """Endpoint per eseguire una query RAG"""
+    # Validazione del provider
+    if request.provider not in ['openai', 'gemini', 'llama']:
+        raise HTTPException(status_code=400, detail=f"Provider non supportato: {request.provider}")
+    
     vector_store = VectorStoreSingleton.get_instance()
     
     if not vector_store.is_initialized():
         return {"error": "Indice non inizializzato. Chiamare prima /ingest/."}
     
     provider = request.provider
-    model = request.model_name or ('gemini-models/gemini-1.5-pro-latest' if provider == 'gemini' else 'gpt-3.5-turbo')
+    
+    # Determinazione del modello di default in base al provider
+    if provider == 'openai':
+        model = request.model_name or 'gpt-3.5-turbo'
+    elif provider == 'gemini':
+        model = request.model_name or 'gemini-models/gemini-1.5-pro-latest'
+    elif provider == 'llama':
+        model = request.model_name or 'llama-model'  # Modello di default per Llama
     
     # Verifica se la risposta è in cache
     if request.use_cache:
@@ -106,6 +121,7 @@ async def get_info():
     info = {
         "is_initialized": vector_store.is_initialized(),
         "supported_file_types": ["pdf", "csv", "xlsx", "xls"],
+        "supported_providers": ["openai", "gemini", "llama"],
         "provider": vector_store._provider,
     }
     
@@ -116,6 +132,27 @@ async def get_info():
         info["document_count"] = doc_count
     
     return info
+
+@app.get('/models/{provider}')
+async def get_models(provider: str):
+    """Endpoint per ottenere i modelli disponibili per un provider specifico"""
+    if provider not in ['openai', 'gemini', 'llama']:
+        raise HTTPException(status_code=400, detail=f"Provider non supportato: {provider}")
+    
+    if provider == 'gemini':
+        from rag.retrieval import supported_gemini_models
+        models = supported_gemini_models()
+        return {"provider": provider, "models": [m.name for m in models if "generateContent" in m.supported_generation_methods]}
+    elif provider == 'llama':
+        from rag.retrieval import supported_llama_models
+        models = supported_llama_models()
+        return {"provider": provider, "models": [m["id"] for m in models]}
+    elif provider == 'openai':
+        # Modelli fissi per OpenAI (potrebbe essere esteso con una chiamata API)
+        return {
+            "provider": provider, 
+            "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
+        }
 
 if __name__ == "__main__":
     import uvicorn

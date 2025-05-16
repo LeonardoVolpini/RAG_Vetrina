@@ -27,9 +27,13 @@ def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provide
     Args:
         file_paths: Lista di percorsi ai file
         rebuild_index: Se True, ricostruisce l'indice anche se esiste
-        provider: Provider di embeddings ('openai' o 'gemini')
+        provider: Provider di embeddings ('openai', 'gemini', o 'llama')
         csv_options: Opzioni specifiche per i file CSV (header_row, include_columns)
     """
+    # Validazione provider
+    if provider not in ['openai', 'gemini', 'llama']:
+        raise ValueError(f"Provider non supportato: {provider}")
+    
     docs = []
     
     # Default opzioni CSV
@@ -90,7 +94,17 @@ def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provide
 def ask_query(query: str, store, provider: str, model_name: str):
     """
     Esegue query RAG su indice già caricato con gestione errori.
+    
+    Args:
+        query: Query utente
+        store: Vector store FAISS
+        provider: Provider LLM ('openai', 'gemini', o 'llama')
+        model_name: Nome del modello specifico
     """
+    # Validazione provider
+    if provider not in ['openai', 'gemini', 'llama']:
+        raise ValueError(f"Provider non supportato: {provider}")
+        
     try:
         rag_chain = build_rag_chain(store, provider, model_name)
         output = rag_chain.invoke(query)

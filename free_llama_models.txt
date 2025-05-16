@@ -1,0 +1,7 @@
+meta-llama/Llama-2-7b-chat-hf (versione più leggera)
+
+meta-llama/Llama-2-13b-chat-hf (versione media)
+
+meta-llama/Llama-2-70b-chat-hf (versione più potente)
+
+meta-llama/Llama-2-70b-hf (versione base senza ottimizzazione per chat)

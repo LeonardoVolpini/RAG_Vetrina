@@ -24,6 +24,10 @@ class VectorStoreSingleton:
             if self._is_initializing:
                 return False
             
+            # Validazione provider
+            if provider not in ['openai', 'gemini', 'llama']:
+                raise ValueError(f"Provider non supportato: {provider}")
+            
             self._is_initializing = True
             self._provider = provider
             
@@ -56,3 +60,7 @@ class VectorStoreSingleton:
     def is_initialized(self):
         """Verifica se lo store è stato inizializzato"""
         return self._store is not None
+        
+    def get_provider(self):
+        """Restituisce il provider corrente"""
+        return self._provider

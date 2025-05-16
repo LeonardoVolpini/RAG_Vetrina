@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     # Google Gemini settings (necessario per l'API gratuita)
     GEMINI_API_KEY: str = None
     
+    # Llama settings
+    LLAMA_API_KEY: str = None
+    LLAMA_API_BASE: str = "https://api.cloud.llamaindex.ai/v1"  # LlamaCloud URL
+    
     # Vector store settings
     VECTOR_STORE_PATH: str = "./vector_store.faiss"
 
