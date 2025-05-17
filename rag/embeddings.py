@@ -42,14 +42,15 @@ class LlamaEmbeddings(Embeddings):
         """Inizializza con l'API key e base URL di Llama"""
         self.api_key = api_key or settings.LLAMA_API_KEY
         self.api_base = api_base or settings.LLAMA_API_BASE
-        self.model = "text-embedding-ada-002"  # Modello compatibile con OpenAI
+        # Use the correct embedding model for LlamaCloud
+        self.model = "llama-text-embeddings"  # Modificato: usando modello appropriato per LlamaCloud
         
     def embed_documents(self, texts):
         """Genera embedding per una lista di testi"""
         embeddings = []
         for text in texts:
             try:
-                # Utilizziamo formato compatibile con OpenAI
+                # Utilizziamo formato per LlamaCloud
                 response = requests.post(
                     f"{self.api_base}/embeddings",
                     headers={
@@ -60,9 +61,23 @@ class LlamaEmbeddings(Embeddings):
                 )
                 response.raise_for_status()  # Raise exception for HTTP errors
                 result = response.json()
-                embeddings.append(result["data"][0]["embedding"])
+                
+                # Log the response structure to debug
+                print(f"LlamaCloud embedding response structure: {result.keys()}")
+                
+                # Extract embedding based on actual response structure
+                if "data" in result and len(result["data"]) > 0 and "embedding" in result["data"][0]:
+                    embeddings.append(result["data"][0]["embedding"])
+                else:
+                    raise ValueError(f"Unexpected response structure from LlamaCloud: {result}")
+                    
             except Exception as e:
-                raise ValueError(f"Error from LlamaCloud API: {str(e)} - Response: {response.text if 'response' in locals() else 'No response'}")
+                error_message = str(e)
+                response_text = response.text if 'response' in locals() else 'No response'
+                print(f"Error from LlamaCloud API: {error_message}")
+                print(f"Response text: {response_text}")
+                raise ValueError(f"Error from LlamaCloud API: {error_message} - Response: {response_text}")
+                
         return embeddings
         
     def embed_query(self, text):
@@ -78,9 +93,19 @@ class LlamaEmbeddings(Embeddings):
             )
             response.raise_for_status()  # Raise exception for HTTP errors
             result = response.json()
-            return result["data"][0]["embedding"]
+            
+            # Extract embedding based on actual response structure
+            if "data" in result and len(result["data"]) > 0 and "embedding" in result["data"][0]:
+                return result["data"][0]["embedding"]
+            else:
+                raise ValueError(f"Unexpected response structure from LlamaCloud: {result}")
+                
         except Exception as e:
-            raise ValueError(f"Error from LlamaCloud API: {str(e)} - Response: {response.text if 'response' in locals() else 'No response'}")
+            error_message = str(e)
+            response_text = response.text if 'response' in locals() else 'No response'
+            print(f"Error from LlamaCloud API: {error_message}")
+            print(f"Response text: {response_text}")
+            raise ValueError(f"Error from LlamaCloud API: {error_message} - Response: {response_text}")
 
 def get_embeddings(provider='openai'):
     """

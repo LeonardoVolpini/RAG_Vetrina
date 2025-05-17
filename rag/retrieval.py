@@ -18,12 +18,17 @@ def get_llm(provider: str, model_name: str):
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.9,
         )
-    elif provider == 'llama':
-        # LlamaCloud usa un'interfaccia compatibile con OpenAI
+    elif provider == 'llama':        
+        if not model_name:
+            model_name = "meta-llama/Llama-2-70b-chat-hf"  # Default model
+            
+        # Log model selection
+        print(f"Using LlamaCloud model: {model_name}")
+        
         return ChatOpenAI(
-            model=model_name or "meta-llama/Llama-2-70b-chat-hf",  # Specifica il modello Llama che vuoi usare
+            model=model_name,
             openai_api_key=settings.LLAMA_API_KEY,
-            openai_api_base="https://api.cloud.llamaindex.ai/v1",  # Endpoint di LlamaCloud
+            openai_api_base=settings.LLAMA_API_BASE,
             temperature=0.7,
             max_tokens=512
         )
@@ -95,9 +100,40 @@ def supported_llama_models():
     """
     Restituisce i modelli supportati da LlamaCloud.
     """
-    # Per LlamaCloud, restituisci un elenco fisso dei modelli noti
+    try:
+        # Tentativo di ottenere i modelli disponibili dall'API
+        import requests
+        from .config import settings
+        
+        headers = {
+            "Authorization": f"Bearer {settings.LLAMA_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{settings.LLAMA_API_BASE}/models",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            models = response.json()["data"]
+            # Filtro solo i modelli rilevanti
+            llm_models = [m for m in models if "llm" in m.get("capabilities", [])]
+            return llm_models
+        else:
+            print(f"Failed to get LlamaCloud models: {response.status_code} - {response.text}")
+            # Fallback to static list
+            return _static_llama_models()
+    except Exception as e:
+        print(f"Error getting LlamaCloud models: {str(e)}")
+        return _static_llama_models()
+
+def _static_llama_models():
+    """Lista statica di modelli Llama noti"""
     return [
-        {"id": "meta-llama/Llama-2-7b-chat-hf"},
-        {"id": "meta-llama/Llama-2-13b-chat-hf"},
-        {"id": "meta-llama/Llama-2-70b-chat-hf"}
+        {"id": "meta-llama/Llama-2-7b-chat-hf", "name": "Llama-2 7B Chat"},
+        {"id": "meta-llama/Llama-2-13b-chat-hf", "name": "Llama-2 13B Chat"},
+        {"id": "meta-llama/Llama-2-70b-chat-hf", "name": "Llama-2 70B Chat"},
+        {"id": "meta-llama/Meta-Llama-3-8B-Instruct", "name": "Meta-Llama-3 8B Instruct"},
+        {"id": "meta-llama/Meta-Llama-3-70B-Instruct", "name": "Meta-Llama-3 70B Instruct"}
     ]

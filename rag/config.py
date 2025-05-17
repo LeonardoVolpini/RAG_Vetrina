@@ -1,7 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
 
-
 class Settings(BaseSettings):
     # OpenAI settings (opzionale se usi solo Gemini)
     OPENAI_API_KEY: str = None
@@ -11,7 +10,7 @@ class Settings(BaseSettings):
     
     # Llama settings
     LLAMA_API_KEY: str = None
-    LLAMA_API_BASE: str = "https://api.cloud.llamaindex.ai/v1"  # LlamaCloud URL
+    LLAMA_API_BASE: str = "https://api.cloud.llamaindex.ai"  # LlamaCloud URL
     
     # Vector store settings
     VECTOR_STORE_PATH: str = "./vector_store.faiss"
