@@ -2,7 +2,7 @@ from langchain.chains import RetrievalQA
 from .config import settings
 
 # import LLM wrappers
-from langchain_openai import OpenAI, ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 def get_llm(provider: str, model_name: str):
@@ -11,7 +11,7 @@ def get_llm(provider: str, model_name: str):
     provider: 'openai', 'gemini' o 'llama'
     """
     if provider == 'openai':
-        return OpenAI(model_name=model_name or "gpt-3.5-turbo", openai_api_key=settings.OPENAI_API_KEY)
+        return ChatOpenAI(model=model_name or "gpt-3.5-turbo", openai_api_key=settings.OPENAI_API_KEY)
     elif provider == 'gemini':
         return ChatGoogleGenerativeAI(
             model=model_name or "models/gemini-1.5-flash-latest",
@@ -62,6 +62,7 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
     Se la domanda riguarda normative, assicurati di specificare se si tratta di normative nazionali o locali.
     Se non conosci la risposta, dì semplicemente che non lo sai, non inventare ed in questo caso inizia la rispostacon "Non lo so".
     Non utilizzare grassetto o corsivo o altre formattazioni tipiche di markdown.
+    Non inventare informazione e non fare supposizioni, attieniti ai dati memorizzati.
     
     Contesto:
     {context}
