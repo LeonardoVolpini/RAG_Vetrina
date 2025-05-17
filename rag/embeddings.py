@@ -41,37 +41,46 @@ class LlamaEmbeddings(Embeddings):
     def __init__(self, api_key=None, api_base=None):
         """Inizializza con l'API key e base URL di Llama"""
         self.api_key = api_key or settings.LLAMA_API_KEY
-        self.api_base = "https://api.cloud.llamaindex.ai/v1" # Endpoint LlamaCloud
+        self.api_base = api_base or settings.LLAMA_API_BASE
         self.model = "text-embedding-ada-002"  # Modello compatibile con OpenAI
         
     def embed_documents(self, texts):
         """Genera embedding per una lista di testi"""
         embeddings = []
         for text in texts:
-            response = requests.post(
-                f"{self.api_base}/embeddings",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={"input": text, "model": self.model}
-            )
-            if response.status_code == 200:
+            try:
+                # Utilizziamo formato compatibile con OpenAI
+                response = requests.post(
+                    f"{self.api_base}/embeddings",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={"input": text, "model": self.model}
+                )
+                response.raise_for_status()  # Raise exception for HTTP errors
                 result = response.json()
                 embeddings.append(result["data"][0]["embedding"])
-            else:
-                raise ValueError(f"Error from LlamaCloud API: {response.text}")
+            except Exception as e:
+                raise ValueError(f"Error from LlamaCloud API: {str(e)} - Response: {response.text if 'response' in locals() else 'No response'}")
         return embeddings
         
     def embed_query(self, text):
         """Genera embedding per una query singola"""
-        response = requests.post(
-            f"{self.api_base}/embeddings",
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            json={"input": text, "model": self.model}
-        )
-        if response.status_code == 200:
+        try:
+            response = requests.post(
+                f"{self.api_base}/embeddings",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={"input": text, "model": self.model}
+            )
+            response.raise_for_status()  # Raise exception for HTTP errors
             result = response.json()
             return result["data"][0]["embedding"]
-        else:
-            raise ValueError(f"Error from LlamaCloud API: {response.text}")
+        except Exception as e:
+            raise ValueError(f"Error from LlamaCloud API: {str(e)} - Response: {response.text if 'response' in locals() else 'No response'}")
 
 def get_embeddings(provider='openai'):
     """

@@ -16,7 +16,6 @@ class CSVOptions(BaseModel):
 class IngestRequest(BaseModel):
     file_paths: List[str]
     provider: Optional[str] = 'openai'  # 'openai', 'gemini', o 'llama'
-    model_name: Optional[str] = None
     rebuild_index: bool = False
     callback_url: Optional[str] = None
     csv_options: Optional[CSVOptions] = None
