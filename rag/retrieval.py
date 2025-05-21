@@ -63,6 +63,7 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
     Se non conosci la risposta, dì semplicemente che non lo sai, non inventare ed in questo caso inizia la rispostacon "Non lo so".
     Non utilizzare grassetto o corsivo o altre formattazioni tipiche di markdown.
     Non inventare informazione e non fare supposizioni, attieniti ai dati memorizzati.
+    Non menzionare la marca/brand a meno che non sia esplicitamente menzionata nel prompt.
     
     Contesto:
     {context}
