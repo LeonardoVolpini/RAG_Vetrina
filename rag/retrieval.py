@@ -16,7 +16,7 @@ def get_llm(provider: str, model_name: str):
         return ChatGoogleGenerativeAI(
             model=model_name or "models/gemini-1.5-flash-latest",
             google_api_key=settings.GEMINI_API_KEY,
-            temperature=0.9,
+            temperature=0.7,
         )
     elif provider == 'llama':        
         if not model_name:
@@ -29,7 +29,7 @@ def get_llm(provider: str, model_name: str):
             model=model_name,
             openai_api_key=settings.LLAMA_API_KEY,
             openai_api_base=settings.LLAMA_API_BASE,
-            temperature=0.7,
+            temperature=0.5,
             max_tokens=512
         )
     else:
@@ -46,7 +46,7 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
         search_kwargs={
             "k": 8,         # Recupera più documenti
             "fetch_k": 25,  # Considera più candidati
-            "lambda_mult": 0.9  # Bilancia rilevanza e diversità
+            "lambda_mult": 0.7  # Bilancia rilevanza e diversità
         }
     )
     
@@ -75,6 +75,25 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
         3. Eventuali aspetti di sicurezza da considerare
         </context_analysis>
 
+        <matching_rules>
+        - Se nel nome del prodotto è presente una sigla tecnica o codice identificativo (es. “GSX900”), trattala come informazione prioritaria per l’identificazione.
+        - Se è presente la marca (brand), usala come vincolo principale per il matching. I prodotti con lo stesso nome ma brand diverso NON sono equivalenti.
+        - Se il brand NON è presente, cerca di identificare il prodotto attraverso la sigla o parole chiave distintive nel nome.
+        - Se il nome è troppo generico (es. “colla”, “intonaco”) e mancano dettagli tecnici, rispondi con "Non lo so".
+        - NON fare inferenze su compatibilità o alternative a meno che non siano chiaramente menzionate nel contesto.
+        </matching_rules>
+
+        <uncertainty_handling>
+        Se più prodotti sembrano simili nel contesto e non è possibile identificarne uno con certezza, segnala ambiguità: “Esistono più possibili corrispondenze”.
+        Se la <user_question> richiede una descrizione per un tipo di prodotto generico (es. "coltello", "martello", "cemento") 
+        E il <document_context> contiene informazioni su più prodotti specifici (diverse marche, modelli o varianti) che rientrano in quella categoria generica, 
+        DEVI segnalare questa ambiguità. Inizia la tua risposta con: “Esistono più possibili corrispondenze per [nome del prodotto generico dalla query].” 
+        Non citarmi nessuna delle possibili corrispondenze, ma non selezionarne una, di solo che ce ne sono varie.
+        NON selezionare arbitrariamente un singolo prodotto specifico dal contesto.
+        Se, nonostante il contesto, non è possibile identificare un prodotto con sufficiente certezza per altri motivi, o se il nome del prodotto nella query è generico 
+        E il contesto manca di dettagli tecnici sufficienti per una descrizione utile, rispondi con "Non lo so".
+        </uncertainty_handling>
+
         <instructions>
         1. Fornisci risposte tecnicamente accurate basate ESCLUSIVAMENTE sul contesto fornito, non inventare
         2. Struttura le informazioni in modo logico e progressivo
@@ -92,6 +111,7 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
         <response_structure>
         Qualora la descrizione sia richiesta per un prodotto molto basilare, non dilungarti inutilmente nella descrizione generata.
         Qualora la domanda richiede un'immagine, limitati a rispondere citando l'url dell'mmagine se la conosci, altrimenti rispondi con "Non lo so".
+        Se la richiesta non richiede esplicitamente un'immagine, non citarla.
         </response_structure>
 
         <document_context>
