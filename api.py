@@ -4,6 +4,8 @@ from typing import List, Optional
 from rag.generate import ingest_documents, ask_query
 from rag.vector_store_singleton import VectorStoreSingleton
 from rag.cache import ResponseCache
+import os
+import json
 import requests
 
 app = FastAPI()
@@ -50,7 +52,7 @@ async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
             provider=request.provider,
             csv_options=csv_options_dict
         )
-        vector_store.set_store(store)
+        vector_store.set_store(store, request.provider)
         print("Ingestione completata:", len(request.file_paths), "documenti elaborati.")
         
         # Invia notifica al callback_url se specificato     TODO non funziona
@@ -121,14 +123,28 @@ async def get_info():
         "is_initialized": vector_store.is_initialized(),
         "supported_file_types": ["pdf", "csv", "xlsx", "xls"],
         "supported_providers": ["openai", "gemini", "llama"],
-        "provider": vector_store._provider,
+        "current_provider": vector_store.get_provider()
     }
     
     # Se lo store è inizializzato, aggiungi dettagli
     if store:
-        # FAISS non espone questa informazione direttamente, quindi dobbiamo usare l'indice docstore interno
         doc_count = len(store.index_to_docstore_id) if hasattr(store, 'index_to_docstore_id') else "unknown"
         info["document_count"] = doc_count
+        info["status"] = "ready"
+    else:
+        info["document_count"] = 0
+        info["status"] = "not_ready" if vector_store.is_initialized() else "needs_ingest"
+    
+    # Carica metadata se disponibili
+    try:
+        from rag.config import settings
+        metadata_path = settings.VECTOR_STORE_PATH + "_metadata.json"
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+                info["last_ingest"] = metadata
+    except:
+        pass
     
     return info
 

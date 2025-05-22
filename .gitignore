@@ -63,4 +63,4 @@ ehthumbs.db
 .claude
 
 # Vector Store
-*.faiss
+*.faiss*
