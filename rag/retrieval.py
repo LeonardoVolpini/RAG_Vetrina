@@ -44,9 +44,10 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
     retriever = store.as_retriever(
         search_type="mmr",  # Maximum Marginal Relevance per diversità
         search_kwargs={
-            "k": 8,         # Recupera più documenti
-            "fetch_k": 25,  # Considera più candidati
-            "lambda_mult": 0.6  # Bilancia rilevanza e diversità
+            "k": 3,         # Recupera più documenti
+            "fetch_k": 20,  # Considera più candidati
+            "lambda_mult": 0.6,  # Bilancia rilevanza e diversità
+            "score_threshold": 0.85  # Solo documenti molto rilevanti
         }
     )
     

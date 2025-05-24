@@ -105,7 +105,6 @@ async def ask(request: AskRequest):
     
     # Ottieni lo store e esegui la query
     store = vector_store.get_store()
-    print(f"Query: {request.query}")
     result = ask_query(request.query, store, provider, model)
     
     # Salva in cache
