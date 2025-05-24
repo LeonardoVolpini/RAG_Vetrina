@@ -29,7 +29,7 @@ def get_llm(provider: str, model_name: str):
             model=model_name,
             openai_api_key=settings.LLAMA_API_KEY,
             openai_api_base=settings.LLAMA_API_BASE,
-            temperature=0.5,
+            temperature=0.6,
             max_tokens=512
         )
     else:
@@ -46,7 +46,7 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
         search_kwargs={
             "k": 8,         # Recupera più documenti
             "fetch_k": 25,  # Considera più candidati
-            "lambda_mult": 0.7  # Bilancia rilevanza e diversità
+            "lambda_mult": 0.6  # Bilancia rilevanza e diversità
         }
     )
     
@@ -112,6 +112,7 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
         Qualora la descrizione sia richiesta per un prodotto molto basilare, non dilungarti inutilmente nella descrizione generata.
         Qualora la domanda richiede un'immagine, limitati a rispondere citando l'url dell'mmagine se la conosci, altrimenti rispondi con "Non lo so".
         Se la richiesta non richiede esplicitamente un'immagine, non citarla.
+        Non citare link del produttore.
         </response_structure>
 
         <document_context>

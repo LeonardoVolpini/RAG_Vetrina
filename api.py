@@ -26,7 +26,7 @@ class AskRequest(BaseModel):
     query: str
     provider: Optional[str] = 'openai'  # 'openai', 'gemini', o 'llama'
     model_name: Optional[str] = None
-    use_cache: bool = True
+    use_cache: bool = False
 
 @app.on_event("startup")
 async def startup_event():
@@ -105,6 +105,7 @@ async def ask(request: AskRequest):
     
     # Ottieni lo store e esegui la query
     store = vector_store.get_store()
+    print(f"Query: {request.query}")
     result = ask_query(request.query, store, provider, model)
     
     # Salva in cache
