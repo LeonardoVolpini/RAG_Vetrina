@@ -4,7 +4,7 @@ from .embeddings import get_embeddings
 from .retrieval import build_rag_chain
 from .config import settings
 import os
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 from langchain_community.vectorstores import FAISS
 
 def get_file_type(file_path: str) -> str:
@@ -94,20 +94,24 @@ def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provide
 def ask_query(query: str, store, provider: str, model_name: str,
               use_few_shot: bool, max_examples: int):
     """
-    Esegue query RAG su indice già caricato con gestione errori.
+    Esegue query RAG su indice già caricato con supporto per reasoning step-by-step.
     
     Args:
         query: Query utente
         store: Vector store FAISS
         provider: Provider LLM ('openai', 'gemini', o 'llama')
         model_name: Nome del modello specifico
+        use_few_shot: Se utilizzare few-shot examples
+        max_examples: Numero massimo di esempi
     """
     # Validazione provider
     if provider not in ['openai', 'gemini', 'llama']:
         raise ValueError(f"Provider non supportato: {provider}")
         
-    try:
-        rag_chain = build_rag_chain(store, provider, model_name, use_few_shot, max_examples)
+    try:        
+        rag_chain = build_rag_chain(
+            store, provider, model_name, use_few_shot, max_examples
+        )
         output = rag_chain.invoke(query)
         sources = [{
             "page": d.metadata.get('page', None),
@@ -119,7 +123,7 @@ def ask_query(query: str, store, provider: str, model_name: str,
         return {
             "answer": output.get('result'), 
             "sources": sources
-            }
+        }
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()

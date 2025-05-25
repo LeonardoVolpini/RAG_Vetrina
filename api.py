@@ -34,15 +34,18 @@ class AskRequest(BaseModel):
 class FewShotExample(BaseModel):
     question: str
     answer: str
+    reasoning: Optional[str] = None
 
 class AddExampleRequest(BaseModel):
     question: str
     answer: str
+    reasoning: Optional[str] = None
 
 class UpdateExampleRequest(BaseModel):
     index: int
     question: Optional[str] = None
     answer: Optional[str] = None
+    reasoning: Optional[str] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -231,7 +234,8 @@ async def add_few_shot_example(request: AddExampleRequest):
         example_manager = FewShotExampleManager()
         example_manager.add_example(
             question=request.question,
-            answer=request.answer
+            answer=request.answer,
+            reasoning=request.reasoning
         )
         total_examples = len(example_manager.get_examples())
         return {
@@ -256,6 +260,8 @@ async def update_few_shot_example(example_index: int, request: UpdateExampleRequ
             examples[example_index]["question"] = request.question
         if request.answer is not None:
             examples[example_index]["answer"] = request.answer
+        if request.reasoning is not None:
+            examples[example_index]["reasoning"] = request.reasoning
         
         # Salva gli esempi aggiornati
         example_manager.examples = examples
@@ -319,7 +325,8 @@ async def add_bulk_few_shot_examples(examples: List[FewShotExample]):
         for example in examples:
             example_manager.add_example(
                 question=example.question,
-                answer=example.answer
+                answer=example.answer,
+                reasoning=example.reasoning
             )
             added_count += 1
         
