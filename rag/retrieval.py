@@ -41,7 +41,7 @@ def get_llm(provider: str, model_name: str):
 def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo', 
                                 use_few_shot: bool = True, max_examples: int = 3):
     """
-    Costruisce un RetrievalQA chain ottimizzato con few-shot examples
+    Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici
     """
     # MMR retriever per migliore diversità nei risultati
     retriever = store.as_retriever(
@@ -56,30 +56,8 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
     
     llm = get_llm(provider, model_name)
     
-    # Gestione few-shot examples
-    few_shot_section = ""
-    if use_few_shot:
-        try:
-            example_manager = FewShotExampleManager()
-            few_shot_section = f"""
-                <few_shot_examples>
-                Ecco alcuni esempi di come rispondere correttamente:
-                {example_manager.format_examples_for_prompt(max_examples)}
-                </few_shot_examples>
-
-                Studia attentamente questi esempi per comprendere:
-                - Come identificare prodotti specifici vs generici
-                - Quando dire "Non lo so" vs "Esistono più possibili corrispondenze"
-                - Il livello di dettaglio tecnico appropriato
-                - Il tono e lo stile delle risposte
-
-                """
-        except Exception as e:
-            print(f"Errore nel caricare few-shot examples: {str(e)}")
-            few_shot_section = ""
-    
-    # Enhanced prompt template with few-shot examples
-    template = f"""
+    # Template base del prompt
+    base_template = """
         Sei un assistente AI esperto specializzato nel settore dell'edilizia e delle costruzioni, progettato per fornire descrizioni tecniche e dettagliate.
 
         <expertise>
@@ -112,8 +90,8 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
         <uncertainty_handling>
         Se la <user_question> richiede una descrizione per un tipo di prodotto generico (es. "coltello", "martello", "cemento") 
         e il <document_context> contiene informazioni su più prodotti specifici (diverse marche, modelli o varianti) che rientrano in quella categoria generica, 
-        DEVI segnalare questa ambiguità. Inizia la tua risposta con: “Esistono più possibili corrispondenze per [nome del prodotto generico dalla query].”,
-        successivamente scegli una fonte e genera la descrizione per quella: quindi la risposta sarà del tipo "Esistono più possibili corrispondenze. Descrizione scelta”.
+        DEVI segnalare questa ambiguità. Inizia la tua risposta con: "Esistono più possibili corrispondenze per [nome del prodotto generico dalla query].",
+        successivamente scegli una fonte e genera la descrizione per quella: quindi la risposta sarà del tipo "Esistono più possibili corrispondenze. Descrizione scelta".
         Se, nonostante il contesto, non sei in grado di generare una descrizione senza inventare rispondi semplicemente "Non lo so", ma NON devi inventare.
         </uncertainty_handling>
 
@@ -134,7 +112,7 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
 
         <response_structure>
         Qualora la descrizione sia richiesta per un prodotto molto basilare, non dilungarti inutilmente nella descrizione generata.
-        Qualora la domanda richiede un'immagine, limitati a rispondere citando l'url dell'mmagine se la conosci, altrimenti rispondi con "Non lo so".
+        Qualora la domanda richiede un'immagine, limitati a rispondere citando l'url dell'immagine se la conosci, altrimenti rispondi con "Non lo so".
         Se la richiesta non richiede esplicitamente un'immagine, non citarla.
         Non citare link del produttore.
         </response_structure>
@@ -150,24 +128,79 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
         Analizza il contesto fornito e fornisci una risposta completa e tecnica seguendo gli esempi forniti:
         """
     
+    # Crea una versione personalizzata del RetrievalQA che include few-shot examples dinamici
+    class CustomRetrievalQA(RetrievalQA):
+        def __init__(self, **kwargs):
+            self.use_few_shot = kwargs.pop('use_few_shot', True)
+            self.max_examples = kwargs.pop('max_examples', 3)
+            self.example_manager = FewShotExampleManager() if self.use_few_shot else None
+            super().__init__(**kwargs)
+        
+        def _get_docs(self, question: str, *, run_manager=None):
+            """Override per includere few-shot examples nella chiamata"""
+            docs = super()._get_docs(question, run_manager=run_manager)
+            
+            # Aggiungi few-shot examples se abilitati
+            if self.use_few_shot and self.example_manager:
+                try:
+                    # Usa esempi rilevanti per la query specifica
+                    few_shot_examples = self.example_manager.get_relevant_examples(
+                        question, 
+                        self.retriever.vectorstore,  # Accesso al vector store
+                        self.max_examples
+                    )
+                    
+                    if few_shot_examples:
+                        few_shot_section = f"""
+                        <few_shot_examples>
+                        Ecco alcuni esempi rilevanti di come rispondere correttamente:
+                        {few_shot_examples}
+                        </few_shot_examples>
+
+                        Studia attentamente questi esempi per comprendere:
+                        - Come identificare prodotti specifici vs generici
+                        - Quando dire "Non lo so" vs "Esistono più possibili corrispondenze"
+                        - Il livello di dettaglio tecnico appropriato
+                        - Il tono e lo stile delle risposte
+
+                        """
+                    else:
+                        few_shot_section = ""
+                        
+                except Exception as e:
+                    print(f"Errore nel recupero few-shot examples: {str(e)}")
+                    few_shot_section = ""
+            else:
+                few_shot_section = ""
+            
+            # Aggiorna il template del prompt con gli esempi dinamici
+            updated_template = base_template.format(few_shot_section=few_shot_section)
+            self.combine_documents_chain.llm_chain.prompt.template = updated_template
+            
+            return docs
+    
+    # Crea il prompt template
     prompt = PromptTemplate(
-        template=template,
+        template=base_template.format(few_shot_section=""),  # Template base senza esempi
         input_variables=["context", "question"]
     )
     
-    return RetrievalQA.from_chain_type(
+    # Crea il chain personalizzato
+    return CustomRetrievalQA.from_chain_type(
         llm=llm,
-        chain_type="stuff",  # Per documenti di edilizia, "stuff" funziona bene con i chunks corretti
+        chain_type="stuff",
         retriever=retriever,
         return_source_documents=True,
-        chain_type_kwargs={"prompt": prompt}
+        chain_type_kwargs={"prompt": prompt},
+        use_few_shot=use_few_shot,
+        max_examples=max_examples
     )
 
 
 def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo',
                     use_few_shot: bool = True, max_examples: int = 3):
     """
-    Wrapper per backward compatibility - usa few-shot examples di default
+    Wrapper per backward compatibility - usa few-shot examples dinamici
     """
     return build_rag_chain_with_examples(store, provider, model_name, use_few_shot, max_examples)
 

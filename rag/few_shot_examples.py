@@ -17,7 +17,7 @@ class FewShotExampleManager:
                 with open(self.examples_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             else:
-                # Crea esempi di default per il dominio edilizia
+                # Crea esempi di default
                 default_examples = self._get_default_examples()
                 self._save_examples(default_examples)
                 return default_examples
@@ -35,62 +35,33 @@ class FewShotExampleManager:
             print(f"Errore nel salvare gli esempi: {str(e)}")
     
     def _get_default_examples(self) -> List[Dict[str, str]]:
-        """Esempi di default per il dominio edilizia"""
-        return [    # TODO
+        """Esempi di default per il dominio edilizia (solo query-answer)"""
+        return [
             {
-                "context": """
-                Prodotto: Cemento Portland CEM II/A-LL 42.5 R
-                Marca: Italcementi
-                Codice: IT-CEM-425R
-                Resistenza: 42.5 MPa a 28 giorni
-                Tipo: Cemento con aggiunta di calcari
-                Applicazioni: Calcestruzzo strutturale, prefabbricati
-                Classe di resistenza: 42.5 R (rapido indurimento)
-                Conforme a: EN 197-1
-                """,
-                "question": "Genera una descrizione di prodotto commerciale per AEG SMERIGLIATRICE D.115 800W. Nella descrizione non includere il nome del prodotto come prima cosa.",
-                "answer": "Il cemento IT-CEM-425R è un cemento Portland di tipo CEM II/A-LL 42.5 R prodotto da Italcementi. Si tratta di un cemento con aggiunta di calcari che raggiunge una resistenza caratteristica di 42.5 MPa a 28 giorni. La sigla 'R' indica un rapido indurimento, rendendolo particolarmente adatto per applicazioni che richiedono sviluppo precoce della resistenza. È conforme alla norma EN 197-1 e viene utilizzato principalmente per calcestruzzo strutturale e nella produzione di prefabbricati."
+                "question": "Descrivimi il cemento Portland CEM II/A-LL 42.5 R",
+                "answer": "Il cemento Portland CEM II/A-LL 42.5 R è un cemento con aggiunta di calcari che raggiunge una resistenza caratteristica di 42.5 MPa a 28 giorni. La sigla 'R' indica un rapido indurimento, rendendolo particolarmente adatto per applicazioni che richiedono sviluppo precoce della resistenza. È conforme alla norma EN 197-1 e viene utilizzato principalmente per calcestruzzo strutturale e nella produzione di prefabbricati."
             },
             {
-                "context": """
-                Prodotto: Trapano a percussione
-                Marca: Bosch
-                Modello: GSB 13 RE
-                Potenza: 600W
-                Mandrino: 13mm
-                Velocità: 0-2800 giri/min
-                Coppia massima: 34 Nm
-                Peso: 1.8 kg
-                """,
-                "question": "Descrivimi il trapano GSB 13 RE",
-                "answer": "Il GSB 13 RE è un trapano a percussione professionale prodotto da Bosch. Ha una potenza di 600W e un mandrino da 13mm, con velocità variabile fino a 2800 giri/min. La coppia massima è di 34 Nm, mentre il peso contenuto di 1.8 kg lo rende maneggevole per lavori prolungati. È adatto per foratura in muratura, legno e metallo grazie alla funzione percussione."
+                "question": "Che caratteristiche ha il trapano GSB 13 RE?",
+                "answer": "Il GSB 13 RE è un trapano a percussione con potenza di 600W e mandrino da 13mm. Ha velocità variabile fino a 2800 giri/min e coppia massima di 34 Nm. Il peso contenuto di 1.8 kg lo rende maneggevole per lavori prolungati. È adatto per foratura in muratura, legno e metallo grazie alla funzione percussione."
             },
             {
-                "context": """
-                Prodotto: Isolante termico
-                Tipo: Pannelli in polistirene espanso EPS
-                Marca: Stiferite
-                Spessore: 50mm, 80mm, 100mm
-                Lambda: 0.036 W/mK
-                Resistenza termica R: da 1.39 a 2.78 m²K/W
-                Classificazione fuoco: Euroclass E
-                """,
-                "question": "Che tipo di isolante è disponibile?",
+                "question": "Descrivimi l'isolante termico disponibile",
                 "answer": "Esistono più possibili corrispondenze per isolante termico."
             },
             {
-                "context": """
-                Vari prodotti di diverse marche per intonaci e malte...
-                """,
-                "question": "Descrivimi l'intonaco",
+                "question": "Che tipo di intonaco è disponibile?",
                 "answer": "Esistono più possibili corrispondenze per intonaco."
+            },
+            {
+                "question": "Dimmi le specifiche del prodotto XYZ123 che non esiste",
+                "answer": "Non lo so."
             }
         ]
     
-    def add_example(self, context: str, question: str, answer: str):
-        """Aggiunge un nuovo esempio"""
+    def add_example(self, question: str, answer: str):
+        """Aggiunge un nuovo esempio (solo question e answer)"""
         new_example = {
-            "context": context.strip(),
             "question": question.strip(),
             "answer": answer.strip()
         }
@@ -113,18 +84,117 @@ class FewShotExampleManager:
             return self.examples[:max_examples]
         return self.examples
     
-    def format_examples_for_prompt(self, max_examples: int = 3) -> str:
-        """Formatta gli esempi per il prompt"""
+    def format_examples_for_prompt(self, max_examples: int = 3, store=None) -> str:
+        """
+        Formatta gli esempi per il prompt, opzionalmente recuperando il contesto dal vector store
+        
+        Args:
+            max_examples: Numero massimo di esempi da includere
+            store: Vector store FAISS per recuperare il contesto (opzionale)
+        """
         examples = self.get_examples(max_examples)
         formatted_examples = []
         
         for i, example in enumerate(examples, 1):
-            formatted_example = f"""
-                Esempio {i}:
-                Contesto: {example['context']}
-                Domanda: {example['question']}
-                Risposta: {example['answer']}
-                """
+            if store:
+                # Recupera il contesto dal vector store per questa query
+                try:
+                    # Cerca documenti rilevanti per la query dell'esempio
+                    relevant_docs = store.similarity_search(example['question'], k=2)
+                    context = "\n".join([doc.page_content for doc in relevant_docs])
+                    
+                    formatted_example = f"""
+                        Esempio {i}:
+                        Contesto recuperato: {context[:500]}{'...' if len(context) > 500 else ''}
+                        Domanda: {example['question']}
+                        Risposta: {example['answer']}
+                        """
+                except Exception as e:
+                    print(f"Errore nel recupero del contesto per l'esempio {i}: {str(e)}")
+                    # Fallback senza contesto
+                    formatted_example = f"""
+                        Esempio {i}:
+                        Domanda: {example['question']}
+                        Risposta: {example['answer']}
+                        """
+            else:
+                # Formato senza contesto
+                formatted_example = f"""
+                    Esempio {i}:
+                    Domanda: {example['question']}
+                    Risposta: {example['answer']}
+                    """
+            
             formatted_examples.append(formatted_example)
         
         return "\n".join(formatted_examples)
+    
+    def get_relevant_examples(self, query: str, store, max_examples: int = 3) -> str:
+        """
+        Recupera gli esempi più rilevanti per una query specifica usando similarity search
+        
+        Args:
+            query: Query dell'utente
+            store: Vector store per il similarity search
+            max_examples: Numero massimo di esempi da restituire
+        """
+        if not self.examples:
+            return ""
+        
+        try:
+            # Crea un mini-vector store con le query degli esempi
+            from langchain.docstore.document import Document
+            from .embeddings import get_embeddings
+            from langchain_community.vectorstores import FAISS
+            
+            # Crea documenti dalle query degli esempi
+            example_docs = []
+            for idx, example in enumerate(self.examples):
+                doc = Document(
+                    page_content=example['question'],
+                    metadata={'example_index': idx}
+                )
+                example_docs.append(doc)
+            
+            if not example_docs:
+                return ""
+            
+            # Crea un vector store temporaneo per gli esempi
+            embeddings = get_embeddings()  # Usa lo stesso provider degli embeddings principali
+            examples_store = FAISS.from_documents(example_docs, embeddings)
+            
+            # Trova gli esempi più simili alla query
+            similar_examples = examples_store.similarity_search(query, k=max_examples)
+            
+            formatted_examples = []
+            for i, sim_doc in enumerate(similar_examples, 1):
+                example_idx = sim_doc.metadata['example_index']
+                example = self.examples[example_idx]
+                
+                # Recupera il contesto dal vector store principale per questo esempio
+                try:
+                    relevant_docs = store.similarity_search(example['question'], k=2)
+                    context = "\n".join([doc.page_content for doc in relevant_docs])
+                    
+                    formatted_example = f"""
+                        Esempio {i}:
+                        Contesto: {context[:400]}{'...' if len(context) > 400 else ''}
+                        Domanda: {example['question']}
+                        Risposta: {example['answer']}
+                        """
+                except Exception as e:
+                    print(f"Errore nel recupero del contesto per l'esempio rilevante {i}: {str(e)}")
+                    formatted_example = f"""
+                        Esempio {i}:
+                        Domanda: {example['question']}
+                        Risposta: {example['answer']}
+                        """
+                
+                formatted_examples.append(formatted_example)
+            
+            return "\n".join(formatted_examples)
+            
+        except Exception as e:
+            print(f"Errore nel recupero degli esempi rilevanti: {str(e)}")
+            # Fallback agli esempi standard
+            return self.format_examples_for_prompt(max_examples, store)

@@ -32,18 +32,15 @@ class AskRequest(BaseModel):
     max_examples: int = 3      # Numero massimo di esempi da utilizzare
 
 class FewShotExample(BaseModel):
-    context: str
     question: str
     answer: str
 
 class AddExampleRequest(BaseModel):
-    context: str
     question: str
     answer: str
 
 class UpdateExampleRequest(BaseModel):
     index: int
-    context: Optional[str] = None
     question: Optional[str] = None
     answer: Optional[str] = None
 
@@ -226,11 +223,10 @@ async def get_few_shot_examples():
 
 @app.post('/few-shot/examples/')
 async def add_few_shot_example(request: AddExampleRequest):
-    """Aggiungi un nuovo esempio few-shot"""
+    """Aggiungi un nuovo esempio few-shot (solo question-answer)"""
     try:
         example_manager = FewShotExampleManager()
         example_manager.add_example(
-            context=request.context,
             question=request.question,
             answer=request.answer
         )
@@ -253,8 +249,6 @@ async def update_few_shot_example(example_index: int, request: UpdateExampleRequ
             raise HTTPException(status_code=404, detail=f"Esempio con indice {example_index} non trovato")
         
         # Aggiorna solo i campi specificati
-        if request.context is not None:
-            examples[example_index]["context"] = request.context
         if request.question is not None:
             examples[example_index]["question"] = request.question
         if request.answer is not None:
@@ -314,14 +308,13 @@ async def get_few_shot_example(example_index: int):
 
 @app.post('/few-shot/examples/bulk')
 async def add_bulk_few_shot_examples(examples: List[FewShotExample]):
-    """Aggiungi più esempi few-shot in una volta"""
+    """Aggiungi più esempi few-shot in una volta (solo question-answer)"""
     try:
         example_manager = FewShotExampleManager()
         added_count = 0
         
         for example in examples:
             example_manager.add_example(
-                context=example.context,
                 question=example.question,
                 answer=example.answer
             )
@@ -337,12 +330,24 @@ async def add_bulk_few_shot_examples(examples: List[FewShotExample]):
         raise HTTPException(status_code=500, detail=f"Errore nell'aggiunta degli esempi: {str(e)}")
 
 @app.get('/few-shot/preview/')
-async def preview_few_shot_prompt(max_examples: int = 3):
-    """Anteprima di come appaiono gli esempi nel prompt"""
+async def preview_few_shot_prompt(max_examples: int = 3, query: str = "esempio di query"):
+    """Anteprima di come appaiono gli esempi nel prompt per una query specifica"""
     try:
+        vector_store = VectorStoreSingleton.get_instance()
+        store = vector_store.get_store()
+        
+        if not store:
+            return {"error": "Vector store non inizializzato"}
+        
         example_manager = FewShotExampleManager()
-        formatted_examples = example_manager.format_examples_for_prompt(max_examples)
+        formatted_examples = example_manager.get_relevant_examples(
+            query=query,
+            store=store,
+            max_examples=max_examples
+        )
+        
         return {
+            "query": query,
             "max_examples": max_examples,
             "formatted_prompt": formatted_examples,
             "total_available_examples": len(example_manager.get_examples())
