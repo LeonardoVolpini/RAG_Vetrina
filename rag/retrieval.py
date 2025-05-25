@@ -85,14 +85,11 @@ def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-
         </matching_rules>
 
         <uncertainty_handling>
-        Se più prodotti sembrano simili nel contesto e non è possibile identificarne uno con certezza, segnala ambiguità: “Esistono più possibili corrispondenze”.
         Se la <user_question> richiede una descrizione per un tipo di prodotto generico (es. "coltello", "martello", "cemento") 
-        E il <document_context> contiene informazioni su più prodotti specifici (diverse marche, modelli o varianti) che rientrano in quella categoria generica, 
-        DEVI segnalare questa ambiguità. Inizia la tua risposta con: “Esistono più possibili corrispondenze per [nome del prodotto generico dalla query].” 
-        Non citarmi nessuna delle possibili corrispondenze, ma non selezionarne una, di solo che ce ne sono varie.
-        NON selezionare arbitrariamente un singolo prodotto specifico dal contesto.
-        Se, nonostante il contesto, non è possibile identificare un prodotto con sufficiente certezza per altri motivi, o se il nome del prodotto nella query è generico 
-        E il contesto manca di dettagli tecnici sufficienti per una descrizione utile, rispondi con "Non lo so".
+        e il <document_context> contiene informazioni su più prodotti specifici (diverse marche, modelli o varianti) che rientrano in quella categoria generica, 
+        DEVI segnalare questa ambiguità. Inizia la tua risposta con: “Esistono più possibili corrispondenze per [nome del prodotto generico dalla query].”,
+        successivamente scegli una fonte e genera la descrizione per quella: quindi la risposta sarà del tipo "Esistono più possibili corrispondenze. Descrizione scelta”.
+        Se, nonostante il contesto, non sei in grado di generare una descrizione senza inventare rispondi semplicemente "Non lo so", ma NON devi inventare.
         </uncertainty_handling>
 
         <instructions>
