@@ -1,9 +1,10 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from rag.generate import ingest_documents, ask_query
 from rag.vector_store_singleton import VectorStoreSingleton
 from rag.cache import ResponseCache
+from rag.few_shot_examples import FewShotExampleManager
 import os
 import json
 import requests
@@ -27,12 +28,30 @@ class AskRequest(BaseModel):
     provider: Optional[str] = 'openai'  # 'openai', 'gemini', o 'llama'
     model_name: Optional[str] = None
     use_cache: bool = False
+    use_few_shot: bool = True  # Nuovo parametro per controllare few-shot
+    max_examples: int = 3      # Numero massimo di esempi da utilizzare
+
+class FewShotExample(BaseModel):
+    context: str
+    question: str
+    answer: str
+
+class AddExampleRequest(BaseModel):
+    context: str
+    question: str
+    answer: str
+
+class UpdateExampleRequest(BaseModel):
+    index: int
+    context: Optional[str] = None
+    question: Optional[str] = None
+    answer: Optional[str] = None
 
 @app.on_event("startup")
 async def startup_event():
     """Inizializzazione dello store al lancio dell'applicazione"""
     vector_store = VectorStoreSingleton.get_instance()
-    vector_store.initialize()  # Default provider: gemini
+    vector_store.initialize()  # Default provider: openai
 
 @app.post('/ingest/')
 async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
@@ -68,7 +87,7 @@ async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
     # Esegui sempre in background, sia per rebuild che per aggiunta incrementale
     background_tasks.add_task(do_ingest)
     
-    if not vector_store.is_initialized() :
+    if not vector_store.is_initialized():
         return {"status": "creating new index", "file_count": len(request.file_paths)}
     elif request.rebuild_index:
         return {"status": "rebuilding index", "file_count": len(request.file_paths)}
@@ -77,7 +96,7 @@ async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
 
 @app.post('/ask/')
 async def ask(request: AskRequest):
-    """Endpoint per eseguire una query RAG"""
+    """Endpoint per eseguire una query RAG con supporto few-shot examples"""
     # Validazione del provider
     if request.provider not in ['openai', 'gemini', 'llama']:
         raise HTTPException(status_code=400, detail=f"Provider non supportato: {request.provider}")
@@ -95,21 +114,33 @@ async def ask(request: AskRequest):
     elif provider == 'gemini':
         model = request.model_name or 'gemini-models/gemini-1.5-pro-latest'
     elif provider == 'llama':
-        model = request.model_name or 'llama-model'  # Modello di default per Llama
+        model = request.model_name or 'llama-model'
+    
+    # Crea una chiave cache
+    cache_key = f"{request.query}_{provider}_{model}_{request.use_few_shot}"
     
     # Verifica se la risposta è in cache
     if request.use_cache:
-        cached_result = response_cache.get(request.query, provider, model)
+        cached_result = response_cache.get(cache_key, provider, model)
         if cached_result:
             return {**cached_result, "from_cache": True}
     
     # Ottieni lo store e esegui la query
     store = vector_store.get_store()
-    result = ask_query(request.query, store, provider, model)
+    
+    try:
+        result = ask_query(request.query, store, provider, model,
+                            request.use_few_shot, request.max_examples)
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Errore durante la query: {error_trace}")
+        result = {"error": str(e), "answer": "Si è verificato un errore durante la generazione della risposta."}
     
     # Salva in cache
     if request.use_cache and "error" not in result:
-        response_cache.set(request.query, provider, model, result)
+        response_cache.set(cache_key, provider, model, result)
     
     return result
 
@@ -123,7 +154,8 @@ async def get_info():
         "is_initialized": vector_store.is_initialized(),
         "supported_file_types": ["pdf", "csv", "xlsx", "xls"],
         "supported_providers": ["openai", "gemini", "llama"],
-        "current_provider": vector_store.get_provider()
+        "current_provider": vector_store.get_provider(),
+        "few_shot_examples_enabled": True
     }
     
     # Se lo store è inizializzato, aggiungi dettagli
@@ -134,6 +166,14 @@ async def get_info():
     else:
         info["document_count"] = 0
         info["status"] = "not_ready" if vector_store.is_initialized() else "needs_ingest"
+    
+    # Aggiungi informazioni sui few-shot examples
+    try:
+        example_manager = FewShotExampleManager()
+        info["few_shot_examples_count"] = len(example_manager.get_examples())
+    except Exception as e:
+        info["few_shot_examples_count"] = 0
+        info["few_shot_examples_error"] = str(e)
     
     # Carica metadata se disponibili
     try:
@@ -163,11 +203,153 @@ async def get_models(provider: str):
         models = supported_llama_models()
         return {"provider": provider, "models": [m["id"] for m in models]}
     elif provider == 'openai':
-        # Modelli fissi per OpenAI (potrebbe essere esteso con una chiamata API)
         return {
             "provider": provider, 
             "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
         }
+
+
+# --- ENDPOINT PER FEW-SHOT EXAMPLES ---
+
+@app.get('/few-shot/examples/')
+async def get_few_shot_examples():
+    """Ottieni tutti gli esempi few-shot"""
+    try:
+        example_manager = FewShotExampleManager()
+        examples = example_manager.get_examples()
+        return {
+            "total_examples": len(examples),
+            "examples": examples
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore nel recupero degli esempi: {str(e)}")
+
+@app.post('/few-shot/examples/')
+async def add_few_shot_example(request: AddExampleRequest):
+    """Aggiungi un nuovo esempio few-shot"""
+    try:
+        example_manager = FewShotExampleManager()
+        example_manager.add_example(
+            context=request.context,
+            question=request.question,
+            answer=request.answer
+        )
+        total_examples = len(example_manager.get_examples())
+        return {
+            "message": "Esempio aggiunto con successo",
+            "total_examples": total_examples
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore nell'aggiunta dell'esempio: {str(e)}")
+
+@app.put('/few-shot/examples/{example_index}')
+async def update_few_shot_example(example_index: int, request: UpdateExampleRequest):
+    """Aggiorna un esempio few-shot esistente"""
+    try:
+        example_manager = FewShotExampleManager()
+        examples = example_manager.get_examples()
+        
+        if example_index < 0 or example_index >= len(examples):
+            raise HTTPException(status_code=404, detail=f"Esempio con indice {example_index} non trovato")
+        
+        # Aggiorna solo i campi specificati
+        if request.context is not None:
+            examples[example_index]["context"] = request.context
+        if request.question is not None:
+            examples[example_index]["question"] = request.question
+        if request.answer is not None:
+            examples[example_index]["answer"] = request.answer
+        
+        # Salva gli esempi aggiornati
+        example_manager.examples = examples
+        example_manager._save_examples(examples)
+        
+        return {
+            "message": "Esempio aggiornato con successo",
+            "updated_example": examples[example_index]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore nell'aggiornamento dell'esempio: {str(e)}")
+
+@app.delete('/few-shot/examples/{example_index}')
+async def delete_few_shot_example(example_index: int):
+    """Elimina un esempio few-shot"""
+    try:
+        example_manager = FewShotExampleManager()
+        success = example_manager.remove_example(example_index)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Esempio con indice {example_index} non trovato")
+        
+        total_examples = len(example_manager.get_examples())
+        return {
+            "message": "Esempio eliminato con successo",
+            "total_examples": total_examples
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore nell'eliminazione dell'esempio: {str(e)}")
+
+@app.get('/few-shot/examples/{example_index}')
+async def get_few_shot_example(example_index: int):
+    """Ottieni un singolo esempio few-shot per indice"""
+    try:
+        example_manager = FewShotExampleManager()
+        examples = example_manager.get_examples()
+        
+        if example_index < 0 or example_index >= len(examples):
+            raise HTTPException(status_code=404, detail=f"Esempio con indice {example_index} non trovato")
+        
+        return {
+            "index": example_index,
+            "example": examples[example_index]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore nel recupero dell'esempio: {str(e)}")
+
+@app.post('/few-shot/examples/bulk')
+async def add_bulk_few_shot_examples(examples: List[FewShotExample]):
+    """Aggiungi più esempi few-shot in una volta"""
+    try:
+        example_manager = FewShotExampleManager()
+        added_count = 0
+        
+        for example in examples:
+            example_manager.add_example(
+                context=example.context,
+                question=example.question,
+                answer=example.answer
+            )
+            added_count += 1
+        
+        total_examples = len(example_manager.get_examples())
+        return {
+            "message": f"{added_count} esempi aggiunti con successo",
+            "added_examples": added_count,
+            "total_examples": total_examples
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore nell'aggiunta degli esempi: {str(e)}")
+
+@app.get('/few-shot/preview/')
+async def preview_few_shot_prompt(max_examples: int = 3):
+    """Anteprima di come appaiono gli esempi nel prompt"""
+    try:
+        example_manager = FewShotExampleManager()
+        formatted_examples = example_manager.format_examples_for_prompt(max_examples)
+        return {
+            "max_examples": max_examples,
+            "formatted_prompt": formatted_examples,
+            "total_available_examples": len(example_manager.get_examples())
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore nella generazione dell'anteprima: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -91,7 +91,8 @@ def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provide
         store.save_local(settings.VECTOR_STORE_PATH)
         return store
 
-def ask_query(query: str, store, provider: str, model_name: str):
+def ask_query(query: str, store, provider: str, model_name: str,
+              use_few_shot: bool, max_examples: int):
     """
     Esegue query RAG su indice già caricato con gestione errori.
     
@@ -106,7 +107,7 @@ def ask_query(query: str, store, provider: str, model_name: str):
         raise ValueError(f"Provider non supportato: {provider}")
         
     try:
-        rag_chain = build_rag_chain(store, provider, model_name)
+        rag_chain = build_rag_chain(store, provider, model_name, use_few_shot, max_examples)
         output = rag_chain.invoke(query)
         sources = [{
             "page": d.metadata.get('page', None),
@@ -115,7 +116,10 @@ def ask_query(query: str, store, provider: str, model_name: str):
             "row_index": d.metadata.get('row_index', None),
             "content_type": d.metadata.get('content_type', None)
         } for d in output.get('source_documents', [])]
-        return {"answer": output.get('result'), "sources": sources}
+        return {
+            "answer": output.get('result'), 
+            "sources": sources
+            }
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
