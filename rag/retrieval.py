@@ -2,6 +2,8 @@ from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from .config import settings
 from .few_shot_examples import FewShotExampleManager
+from typing import Any, Optional
+from pydantic import PrivateAttr
 
 # import LLM wrappers
 from langchain_openai import ChatOpenAI
@@ -130,11 +132,39 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
     
     # Crea una versione personalizzata del RetrievalQA che include few-shot examples dinamici
     class CustomRetrievalQA(RetrievalQA):
-        def __init__(self, **kwargs):
-            self.use_few_shot = kwargs.pop('use_few_shot', True)
-            self.max_examples = kwargs.pop('max_examples', 3)
-            self.example_manager = FewShotExampleManager() if self.use_few_shot else None
-            super().__init__(**kwargs)
+        _use_few_shot: bool     = PrivateAttr()
+        _max_examples: int      = PrivateAttr()
+        _example_manager: Any   = PrivateAttr()
+
+        def __init__(self, *args: Any, **kwargs: Any):
+            # Estrai e rimuovi i custom params
+            _ufs = kwargs.pop("use_few_shot", True)
+            _mex = kwargs.pop("max_examples", 3)
+
+            # Costruttore base: tutti gli altri argomenti
+            super().__init__(*args, **kwargs)
+
+            # Ora assegna i PrivateAttr bypassando Pydantic
+            object.__setattr__(self, "_use_few_shot", _ufs)
+            object.__setattr__(self, "_max_examples", _mex)
+            object.__setattr__(
+                self,
+                "_example_manager",
+                FewShotExampleManager() if _ufs else None
+            )
+
+        # Proprietà per accedere ai tuoi PrivateAttr
+        @property
+        def use_few_shot(self) -> bool:
+            return self._use_few_shot
+
+        @property
+        def max_examples(self) -> int:
+            return self._max_examples
+
+        @property
+        def example_manager(self) -> Optional[Any]:
+            return self._example_manager
         
         def _get_docs(self, question: str, *, run_manager=None):
             """Override per includere few-shot examples nella chiamata"""

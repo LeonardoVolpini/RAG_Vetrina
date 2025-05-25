@@ -112,9 +112,12 @@ async def ask(request: AskRequest):
         model = request.model_name or 'gemini-models/gemini-1.5-pro-latest'
     elif provider == 'llama':
         model = request.model_name or 'llama-model'
+
+    use_few_shot = request.use_few_shot or True
+    max_examples = request.max_examples or 3
     
     # Crea una chiave cache
-    cache_key = f"{request.query}_{provider}_{model}_{request.use_few_shot}"
+    cache_key = f"{request.query}_{provider}_{model}_{use_few_shot}"
     
     # Verifica se la risposta è in cache
     if request.use_cache:
@@ -127,7 +130,7 @@ async def ask(request: AskRequest):
     
     try:
         result = ask_query(request.query, store, provider, model,
-                            request.use_few_shot, request.max_examples)
+                            use_few_shot, max_examples)
         
     except Exception as e:
         import traceback
