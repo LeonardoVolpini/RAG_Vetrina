@@ -38,40 +38,18 @@ class FewShotExampleManager:
         """Esempi di default con reasoning step-by-step"""
         return [
             {
-                "question": "Genera una descrizione di prodotto commerciale per YAMATO SMERIGLIATRICE D.115 550W",
-                "reasoning": "Per questo prodotto la corrispondenza corretta sarebbe: SMERIGLIATRICE ANGOLARESA 115/K da cercare nel csv yamato prodotti. In questo caso la marca è yamato, oltre alle tue conoscenze la marca è solitamente una parola che non rientra nel dizionario italiano. Una volta trovato il csv da dove cercare fare attenzione alle specifiche, in questo caso bisogna ricercare all'interno della descrizione. d.115 significa diametro 115 mentre 550w è la potenza, quindi nella descrizione andrò a cercare questi parametri. In questo caso l'unico prodotto è quello menzionato sopra con la seguente descrizione: Ø disco: 115 mm potenza: 550 watt giri minuto: 12.000 Ø perno: 14 MA peso: 1,80 kg bloccaggio mola a pulsante disco non in dotazione. Ø indica diametro e viene spesso scritto con d.",
-                "answer": "Specifiche tecniche: Ø disco: 115 mm potenza: 550 watt giri minuto: 12.000 Ø perno: 14 MA peso: 1,80 kg bloccaggio mola a pulsante disco non in dotazione"
-            },
-            {
-                "question": "Descrivimi il cemento Portland CEM II/A-LL 42.5 R",
-                "reasoning": "Il cemento è identificato dalla sigla tecnica completa 'CEM II/A-LL 42.5 R' che fornisce informazioni specifiche: CEM II indica il tipo di cemento Portland composito, A-LL specifica l'aggiunta di calcari, 42.5 è la classe di resistenza in MPa, R indica rapido indurimento. Cerco nel contesto questa sigla esatta o riferimenti alle sue caratteristiche tecniche.",
-                "answer": "Il cemento Portland CEM II/A-LL 42.5 R è un cemento con aggiunta di calcari che raggiunge una resistenza caratteristica di 42.5 MPa a 28 giorni. La sigla 'R' indica un rapido indurimento, rendendolo particolarmente adatto per applicazioni che richiedono sviluppo precoce della resistenza. È conforme alla norma EN 197-1 e viene utilizzato principalmente per calcestruzzo strutturale e nella produzione di prefabbricati."
-            },
-            {
-                "question": "Che caratteristiche ha il trapano GSB 13 RE?",
-                "reasoning": "Il prodotto è identificato dal codice specifico 'GSB 13 RE' che è una sigla tecnica precisa del produttore. Il numero 13 probabilmente indica il diametro del mandrino in mm, mentre RE potrebbe indicare caratteristiche specifiche. Cerco nel contesto questo codice esatto per trovare le specifiche tecniche complete.",
-                "answer": "Il GSB 13 RE è un trapano a percussione con potenza di 600W e mandrino da 13mm. Ha velocità variabile fino a 2800 giri/min e coppia massima di 34 Nm. Il peso contenuto di 1.8 kg lo rende maneggevole per lavori prolungati. È adatto per foratura in muratura, legno e metallo grazie alla funzione percussione."
-            },
-            {
-                "question": "Descrivimi l'isolante termico disponibile",
-                "reasoning": "La richiesta è generica ('isolante termico') senza specificare marca, tipo, spessore o altre caratteristiche distintive. Nel contesto probabilmente ci sono diversi tipi di isolanti termici con caratteristiche diverse (lana di roccia, polistirene, fibra di vetro, ecc.). Poiché non posso identificare un prodotto specifico, devo segnalare l'ambiguità.",
-                "answer": "Esistono più possibili corrispondenze per isolante termico."
-            },
-            {
-                "question": "Che tipo di intonaco è disponibile?",
-                "reasoning": "Anche questa è una richiesta generica senza specificazioni tecniche. Gli intonaci possono essere di diversi tipi: civile, premiscelato, a base calce, gesso, ecc. Senza ulteriori dettagli non posso identificare un prodotto specifico, quindi segnalo l'ambiguità.",
-                "answer": "Esistono più possibili corrispondenze per intonaco."
-            },
-            {
+                "context_snapshot": """[ { "id": "IDROASP-1400W-30L", "brand": "acme", "potenza_w": "1400", "capacita_l": "30" },
+                                        { "id": "IDROASP-1400W-20L", "brand": "acme", "potenza_w": "1400", "capacita_l": "20" }]""",
                 "question": "Dimmi le specifiche del prodotto XYZ123 che non esiste",
                 "reasoning": "Il codice 'XYZ123' non corrisponde a nessun prodotto nel contesto fornito. Ho cercato nei documenti disponibili ma non ho trovato alcun riferimento a questo codice prodotto. Non posso inventare specifiche per prodotti inesistenti.",
                 "answer": "Non lo so."
             }
         ]
     
-    def add_example(self, question: str, answer: str, reasoning: str):
+    def add_example(self, question: str, answer: str, context_snapshot: str, reasoning: str):
         """Aggiunge un nuovo esempio con reasoning"""
         new_example = {
+            "context_snapshot": context_snapshot.strip(),
             "question": question.strip(),
             "answer": answer.strip(),
             "reasoning": reasoning.strip()
@@ -80,7 +58,7 @@ class FewShotExampleManager:
         self.examples.append(new_example)
         self._save_examples(self.examples)
 
-        print(f"Aggiunto nuovo esempio con reasoning. Totale esempi: {len(self.examples)}")
+        print(f"Aggiunto nuovo esempio. Totale esempi: {len(self.examples)}")
     
     def remove_example(self, index: int):
         """Rimuove un esempio per indice"""
@@ -108,38 +86,14 @@ class FewShotExampleManager:
         examples = self.get_examples(max_examples)
         formatted_examples = []
         
-        for i, example in enumerate(examples, 1):
-            if store:
-                # Recupera il contesto dal vector store per questa query
-                try:
-                    # Cerca documenti rilevanti per la query dell'esempio
-                    relevant_docs = store.similarity_search(example['question'], k=2)
-                    context = "\n".join([doc.page_content for doc in relevant_docs])
-                    
-                    formatted_example = f"""
+        for i, example in enumerate(examples, 1):       
+            formatted_example = f"""
                         Esempio {i}:
-                        Contesto recuperato: {context[:400]}{'...' if len(context) > 400 else ''}
+                        Contesto: {example['context_snapshto']}
                         Domanda: {example['question']}
                         Processo di ragionamento: {example['reasoning']}
                         Risposta: {example['answer']}
                         """
-                except Exception as e:
-                    print(f"Errore nel recupero del contesto per l'esempio {i}: {str(e)}")
-                    # Fallback senza contesto
-                    formatted_example = f"""
-                        Esempio {i}:
-                        Domanda: {example['question']}
-                        Processo di ragionamento: {example['reasoning']}
-                        Risposta: {example['answer']}
-                        """
-            else:
-                # Formato senza contesto
-                formatted_example = f"""
-                    Esempio {i}:
-                    Domanda: {example['question']}
-                    Processo di ragionamento: {example['reasoning']}
-                    Risposta: {example['answer']}
-                    """
             
             formatted_examples.append(formatted_example)
         
@@ -187,26 +141,13 @@ class FewShotExampleManager:
                 example_idx = sim_doc.metadata['example_index']
                 example = self.examples[example_idx]
                 
-                # Recupera il contesto dal vector store principale per questo esempio
-                try:
-                    relevant_docs = store.similarity_search(example['question'], k=2)
-                    context = "\n".join([doc.page_content for doc in relevant_docs])
-                    
-                    formatted_example = f"""
-                        Esempio {i}:
-                        Contesto: {context[:400]}{'...' if len(context) > 400 else ''}
-                        Domanda: {example['question']}
-                        Processo di ragionamento: {example['reasoning']}
-                        Risposta: {example['answer']}
-                        """
-                except Exception as e:
-                    print(f"Errore nel recupero del contesto per l'esempio rilevante {i}: {str(e)}")
-                    formatted_example = f"""
-                        Esempio {i}:
-                        Domanda: {example['question']}
-                        Processo di ragionamento: {example['reasoning']}
-                        Risposta: {example['answer']}
-                        """
+                formatted_example = f"""
+                            Esempio {i}:
+                            Contesto: {example['context_snapshto']}
+                            Domanda: {example['question']}
+                            Processo di ragionamento: {example['reasoning']}
+                            Risposta: {example['answer']}
+                            """
                 
                 formatted_examples.append(formatted_example)
             

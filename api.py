@@ -34,17 +34,20 @@ class AskRequest(BaseModel):
 class FewShotExample(BaseModel):
     question: str
     answer: str
+    context_snapshot: str
     reasoning: Optional[str] = None
 
 class AddExampleRequest(BaseModel):
     question: str
     answer: str
+    context_snapshot: str
     reasoning: Optional[str] = None
 
 class UpdateExampleRequest(BaseModel):
     index: int
     question: Optional[str] = None
     answer: Optional[str] = None
+    context_snapshot: str
     reasoning: Optional[str] = None
 
 @app.on_event("startup")
@@ -235,6 +238,7 @@ async def add_few_shot_example(request: AddExampleRequest):
         example_manager.add_example(
             question=request.question,
             answer=request.answer,
+            context_snapshot=request.context_snapshot,
             reasoning=request.reasoning
         )
         total_examples = len(example_manager.get_examples())
@@ -260,6 +264,8 @@ async def update_few_shot_example(example_index: int, request: UpdateExampleRequ
             examples[example_index]["question"] = request.question
         if request.answer is not None:
             examples[example_index]["answer"] = request.answer
+        if request.context_snapshot is not None:
+            examples[example_index]['context_snapshot'] = request.context_snapshot
         if request.reasoning is not None:
             examples[example_index]["reasoning"] = request.reasoning
         
@@ -326,6 +332,7 @@ async def add_bulk_few_shot_examples(examples: List[FewShotExample]):
             example_manager.add_example(
                 question=example.question,
                 answer=example.answer,
+                context_snapshot=example.context_snapshot,
                 reasoning=example.reasoning
             )
             added_count += 1
