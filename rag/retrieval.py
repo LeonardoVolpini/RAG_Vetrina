@@ -40,26 +40,11 @@ def get_llm(provider: str, model_name: str):
         raise ValueError(f"Provider LLM non valido: {provider}")
 
 
-def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo', 
-                                use_few_shot: bool = True, max_examples: int = 3):
+def get_base_template() -> str:
     """
-    Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici
+    Restituisce il template base del prompt
     """
-    # MMR retriever per migliore diversità nei risultati
-    retriever = store.as_retriever(
-        search_type="mmr",  # Maximum Marginal Relevance per diversità
-        search_kwargs={
-            "k": 3,         # Recupera più documenti
-            "fetch_k": 20,  # Considera più candidati
-            "lambda_mult": 0.6,  # Bilancia rilevanza e diversità
-            "score_threshold": 0.85  # Solo documenti molto rilevanti
-        }
-    )
-    
-    llm = get_llm(provider, model_name)
-    
-    # Template base del prompt
-    base_template = """
+    return """
         Sei un assistente AI esperto specializzato nel settore dell'edilizia e delle costruzioni, progettato per fornire descrizioni tecniche e dettagliate.
 
         <expertise>
@@ -130,6 +115,25 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
 
         Analizza il contesto fornito e fornisci una risposta completa e tecnica seguendo gli esempi forniti:
         """
+
+
+def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo', 
+                                use_few_shot: bool = True, max_examples: int = 3):
+    """
+    Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici
+    """
+    # MMR retriever per migliore diversità nei risultati
+    retriever = store.as_retriever(
+        search_type="mmr",  # Maximum Marginal Relevance per diversità
+        search_kwargs={
+            "k": 3,         # Recupera più documenti
+            "fetch_k": 20,  # Considera più candidati
+            "lambda_mult": 0.6,  # Bilancia rilevanza e diversità
+            "score_threshold": 0.85  # Solo documenti molto rilevanti
+        }
+    )
+    
+    llm = get_llm(provider, model_name)
     
     # Crea una versione personalizzata del RetrievalQA che include few-shot examples dinamici
     class CustomRetrievalQA(RetrievalQA):
@@ -205,14 +209,18 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
                 few_shot_section = ""
                 
             # Aggiorna il template del prompt con gli esempi dinamici
-            updated_template = base_template.format(few_shot_section=few_shot_section)
+            base_template = get_base_template()
+            updated_template = base_template.replace("{few_shot_section}", few_shot_section)
             self.combine_documents_chain.llm_chain.prompt.template = updated_template
             
             return docs
 
-    # Crea il prompt template
+    # Ottieni il template base e rimuovi il placeholder few_shot_section per ora
+    base_template = get_base_template()
+    initial_template = base_template.replace("{few_shot_section}", "")
+
     prompt = PromptTemplate(
-        template=base_template.format(few_shot_section=""),  # Template base senza esempi
+        template=initial_template,
         input_variables=["context", "question"]
     )
     
