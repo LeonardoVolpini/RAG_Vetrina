@@ -113,18 +113,19 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
         </instructions>
 
         <response_structure>
+        NON iniziare la risposta con frasi generiche come "Ecco la risposta" o "In base al contesto..." o "Rigurdo a ".
         Qualora la descrizione sia richiesta per un prodotto molto basilare, non dilungarti inutilmente nella descrizione generata.
         Qualora la domanda richiede un'immagine, limitati a rispondere citando l'url dell'immagine se la conosci, altrimenti rispondi con "Non lo so".
         Se la richiesta non richiede esplicitamente un'immagine, non citarla.
-        Non citare link del produttore.
+        NON citare link del produttore.
         </response_structure>
 
         <document_context>
-        {{context}}
+        {context}
         </document_context>
 
         <user_question>
-        {{question}}
+        {question}
         </user_question>
 
         Analizza il contesto fornito e fornisci una risposta completa e tecnica seguendo gli esempi forniti:
@@ -202,13 +203,13 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
                     few_shot_section = ""
             else:
                 few_shot_section = ""
-            
+                
             # Aggiorna il template del prompt con gli esempi dinamici
             updated_template = base_template.format(few_shot_section=few_shot_section)
             self.combine_documents_chain.llm_chain.prompt.template = updated_template
             
             return docs
-    
+
     # Crea il prompt template
     prompt = PromptTemplate(
         template=base_template.format(few_shot_section=""),  # Template base senza esempi

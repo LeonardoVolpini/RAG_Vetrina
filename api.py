@@ -34,20 +34,20 @@ class AskRequest(BaseModel):
 class FewShotExample(BaseModel):
     question: str
     answer: str
-    context_snapshot: str
-    reasoning: Optional[str] = None
+    context_snapshot: Any
+    reasoning: str
 
 class AddExampleRequest(BaseModel):
     question: str
     answer: str
-    context_snapshot: str
-    reasoning: Optional[str] = None
+    context_snapshot: Any
+    reasoning: str
 
 class UpdateExampleRequest(BaseModel):
     index: int
     question: Optional[str] = None
     answer: Optional[str] = None
-    context_snapshot: str
+    context_snapshot: Optional[Any] = None
     reasoning: Optional[str] = None
 
 @app.on_event("startup")
@@ -235,10 +235,16 @@ async def add_few_shot_example(request: AddExampleRequest):
     """Aggiungi un nuovo esempio few-shot (solo question-answer)"""
     try:
         example_manager = FewShotExampleManager()
+        
+        # Se context_snapshot è un array di oggetti, trasformalo in stringa JSON
+        context_snapshot = request.context_snapshot
+        if isinstance(context_snapshot, list) or isinstance(context_snapshot, dict):
+            context_snapshot = json.dumps(context_snapshot, ensure_ascii=False)
+            
         example_manager.add_example(
             question=request.question,
             answer=request.answer,
-            context_snapshot=request.context_snapshot,
+            context_snapshot=context_snapshot,
             reasoning=request.reasoning
         )
         total_examples = len(example_manager.get_examples())

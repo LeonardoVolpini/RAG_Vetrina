@@ -38,18 +38,24 @@ class FewShotExampleManager:
         """Esempi di default con reasoning step-by-step"""
         return [
             {
-                "context_snapshot": """[ { "id": "IDROASP-1400W-30L", "brand": "acme", "potenza_w": "1400", "capacita_l": "30" },
-                                        { "id": "IDROASP-1400W-20L", "brand": "acme", "potenza_w": "1400", "capacita_l": "20" }]""",
-                "question": "Dimmi le specifiche del prodotto XYZ123 che non esiste",
-                "reasoning": "Il codice 'XYZ123' non corrisponde a nessun prodotto nel contesto fornito. Ho cercato nei documenti disponibili ma non ho trovato alcun riferimento a questo codice prodotto. Non posso inventare specifiche per prodotti inesistenti.",
+                "context_snapshot": """[ 
+                                        { "name": "CARTA ABRASIVA PER MOLLA - FDS 140. Abrasive Paper- Clamp Type for FDS 140", "brand": "AEG", "description": "Carta abrasiva preforata per legno, vernice, smalto e spatolato; Tipo di grana: ossido di alluminio legato con resina artificiale su carta speciale antistrappo; Ideale per legno e lavori di carrozzeria", "immagine": "https://d1pu2ba46e97q8.cloudfront.net/remote.axd/aeg-media-images.s3.amazonaws.com/hi/4932352424_AEG--Hero_1.jpg?v=FB04971466AE7046B1C384F3FA41A653&width=900"},
+                                        { "name": "Martello demolitore 7 kg SDS-MAX MH 7E", "brand": "AEG", "description": "Potente motore da 1500 watt; Energia di impatto 10,5 J, per pesanti applicazioni di scalpellatura; La modalità di percussione morbida permette di ridurre l'energia battente per migliori risultati in materiali teneri; Il sistema di antivibrazione AVS permette di ridurre significativamente le vibrazioni, per un maggior comfort di utilizzo; Avviamento morbido per un'ottimale controllo della foratura; 'Luce service' indica la necessità di manutenzione; Indicatore luminoso di presenza della tensione", "immagine": "https://d1pu2ba46e97q8.cloudfront.net/remote.axd/aeg-media-images.s3.amazonaws.com/hi/MH_7E--Hero_1.jpg?v=EA95AFF8F3A854E37D561C9AAD18B891&width=900" }
+                                    ]""",
+                "question": "Genera una descrizione di prodotto commerciale per Smerigliatrice angolare Brushless 18V BEWS 18-125BL",
+                "reasoning": """
+                                1. Ho esaminato il contesto fornito e ho trovato due prodotti: una carta abrasiva e un martello demolitore.
+                                2. Nessuno di questi prodotti è una smerigliatrice angolare, quindi non posso generare una descrizione per un prodotto che non è presente nel contesto.
+                                3. Non posso inventare specifiche per un prodotto inesistente, quindi la risposta è "Non lo so."
+                            """,
                 "answer": "Non lo so."
             }
         ]
     
     def add_example(self, question: str, answer: str, context_snapshot: str, reasoning: str):
-        """Aggiunge un nuovo esempio con reasoning"""
+        """Aggiunge un nuovo esempio con reasoning"""        
         new_example = {
-            "context_snapshot": context_snapshot.strip(),
+            "context_snapshot": context_snapshot.strip().replace("{", "{{").replace("}", "}}"),
             "question": question.strip(),
             "answer": answer.strip(),
             "reasoning": reasoning.strip()
@@ -89,7 +95,7 @@ class FewShotExampleManager:
         for i, example in enumerate(examples, 1):       
             formatted_example = f"""
                         Esempio {i}:
-                        Contesto: {example['context_snapshto']}
+                        Contesto: {example['context_snapshot']}
                         Domanda: {example['question']}
                         Processo di ragionamento: {example['reasoning']}
                         Risposta: {example['answer']}
@@ -143,7 +149,7 @@ class FewShotExampleManager:
                 
                 formatted_example = f"""
                             Esempio {i}:
-                            Contesto: {example['context_snapshto']}
+                            Contesto: {example['context_snapshot']}
                             Domanda: {example['question']}
                             Processo di ragionamento: {example['reasoning']}
                             Risposta: {example['answer']}
