@@ -64,4 +64,3 @@ ehthumbs.db
 
 # Vector Store
 *.faiss*
-few_shot_examples.*

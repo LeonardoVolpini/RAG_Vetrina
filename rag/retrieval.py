@@ -78,7 +78,8 @@ def get_base_template() -> str:
         Se la <user_question> richiede una descrizione per un tipo di prodotto generico (es. "coltello", "martello", "cemento") 
         e il <document_context> contiene informazioni su più prodotti specifici (diverse marche, modelli o varianti) che rientrano in quella categoria generica, 
         DEVI segnalare questa ambiguità. Inizia la tua risposta con: "Esistono più possibili corrispondenze per [nome del prodotto generico dalla query].",
-        successivamente scegli una fonte e genera la descrizione per quella: quindi la risposta sarà del tipo "Esistono più possibili corrispondenze. Descrizione scelta".
+        successivamente scegli una fonte e genera la descrizione per quella: quindi la risposta sarà del tipo "Esistono più possibili corrispondenze. Descrizione scelta:".
+        Quindi utilizza il formato "Esistono più possibili corrispondenze. Descrizione scelta:" solamente se sei indeciso sul prodotto del contesto da selezionare.
         Se, nonostante il contesto, non sei in grado di generare una descrizione senza inventare rispondi semplicemente "Non lo so", ma NON devi inventare.
         </uncertainty_handling>
 
@@ -208,6 +209,7 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
             else:
                 few_shot_section = ""
                 
+            # print(f"Few shot examples {few_shot_examples}")
             # Aggiorna il template del prompt con gli esempi dinamici
             base_template = get_base_template()
             updated_template = base_template.replace("{few_shot_section}", few_shot_section)
