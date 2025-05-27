@@ -55,7 +55,7 @@ class FewShotExampleManager:
     def add_example(self, question: str, answer: str, context_snapshot: str, reasoning: str):
         """Aggiunge un nuovo esempio con reasoning"""        
         new_example = {
-            "context_snapshot": context_snapshot.strip().replace("{", "{{").replace("}", "}}"),
+            "context_snapshot": context_snapshot.strip(),
             "question": question.strip(),
             "answer": answer.strip(),
             "reasoning": reasoning.strip()
@@ -81,6 +81,31 @@ class FewShotExampleManager:
             return self.examples[:max_examples]
         return self.examples
     
+    def _format_context_for_prompt(self, context_snapshot: str) -> str:
+        """
+        Formatta il context_snapshot per il template del prompt.
+        Gestisce sia stringhe JSON che stringhe normali e escapa le parentesi graffe.
+        """
+        if not context_snapshot or context_snapshot.strip() == "":
+            return ""
+            
+        try:
+            # Prova a parsare come JSON
+            parsed_context = json.loads(context_snapshot)
+            # Se è un oggetto o array, formattalo in modo leggibile
+            if isinstance(parsed_context, (dict, list)):
+                formatted_json = json.dumps(parsed_context, indent=2, ensure_ascii=False)
+                # Escapa le parentesi graffe per evitare conflitti con il template
+                return formatted_json.replace("{", "{{").replace("}", "}}")
+            else:
+                # Se è un valore semplice, restituiscilo come stringa
+                result = str(parsed_context)
+                return result.replace("{", "{{").replace("}", "}}")
+        except (json.JSONDecodeError, TypeError):
+            # Se non è JSON valido, restituisci la stringa originale
+            result = context_snapshot.strip()
+            return result.replace("{", "{{").replace("}", "}}")
+    
     def format_examples_for_prompt(self, max_examples: int = 3, store=None) -> str:
         """
         Formatta gli esempi per il prompt
@@ -90,20 +115,28 @@ class FewShotExampleManager:
             store: Vector store FAISS per recuperare il contesto (opzionale)
         """
         examples = self.get_examples(max_examples)
+        if not examples:
+            return ""
+            
         formatted_examples = []
         
-        for i, example in enumerate(examples, 1):       
-            formatted_example = f"""
-                        Esempio {i}:
-                        Contesto: {example['context_snapshot']}
-                        Domanda: {example['question']}
-                        Processo di ragionamento: {example['reasoning']}
-                        Risposta: {example['answer']}
-                        """
+        for i, example in enumerate(examples, 1):
+            # Salta esempi vuoti o di default
+            if not example.get('question') or not example.get('answer'):
+                continue
+                
+            # Formatta il contesto in modo sicuro
+            context_for_prompt = self._format_context_for_prompt(example.get('context_snapshot', ''))
+            
+            formatted_example = f"""Esempio {i}:
+Contesto: {context_for_prompt}
+Domanda: {example['question']}
+Processo di ragionamento: {example.get('reasoning', '')}
+Risposta: {example['answer']}"""
             
             formatted_examples.append(formatted_example)
         
-        return "\n".join(formatted_examples)
+        return "\n\n".join(formatted_examples)
     
     def get_relevant_examples(self, query: str, store, max_examples: int = 3) -> str:
         """
@@ -117,6 +150,11 @@ class FewShotExampleManager:
         if not self.examples:
             return ""
         
+        # Filtra esempi vuoti
+        valid_examples = [ex for ex in self.examples if ex.get('question') and ex.get('answer')]
+        if not valid_examples:
+            return ""
+        
         try:
             # Crea un mini-vector store con le query degli esempi
             from langchain.docstore.document import Document
@@ -125,7 +163,7 @@ class FewShotExampleManager:
             
             # Crea documenti dalle query degli esempi
             example_docs = []
-            for idx, example in enumerate(self.examples):
+            for idx, example in enumerate(valid_examples):
                 doc = Document(
                     page_content=example['question'],
                     metadata={'example_index': idx}
@@ -136,28 +174,29 @@ class FewShotExampleManager:
                 return ""
             
             # Crea un vector store temporaneo per gli esempi
-            embeddings = get_embeddings()  # Usa lo stesso provider degli embeddings principali
+            embeddings = get_embeddings()   # Usa lo stesso provider degli embeddings principali
             examples_store = FAISS.from_documents(example_docs, embeddings)
             
             # Trova gli esempi più simili alla query
-            similar_examples = examples_store.similarity_search(query, k=max_examples)
+            similar_examples = examples_store.similarity_search(query, k=min(max_examples, len(example_docs)))
             
             formatted_examples = []
             for i, sim_doc in enumerate(similar_examples, 1):
                 example_idx = sim_doc.metadata['example_index']
-                example = self.examples[example_idx]
+                example = valid_examples[example_idx]
                 
-                formatted_example = f"""
-                            Esempio {i}:
-                            Contesto: {example['context_snapshot']}
-                            Domanda: {example['question']}
-                            Processo di ragionamento: {example['reasoning']}
-                            Risposta: {example['answer']}
-                            """
+                # Formatta il contesto in modo sicuro
+                context_for_prompt = self._format_context_for_prompt(example.get('context_snapshot', ''))
+                
+                formatted_example = f"""Esempio {i}:
+Contesto: {context_for_prompt}
+Domanda: {example['question']}
+Processo di ragionamento: {example.get('reasoning', '')}
+Risposta: {example['answer']}"""
                 
                 formatted_examples.append(formatted_example)
             
-            return "\n".join(formatted_examples)
+            return "\n\n".join(formatted_examples)
             
         except Exception as e:
             print(f"Errore nel recupero degli esempi rilevanti: {str(e)}")
