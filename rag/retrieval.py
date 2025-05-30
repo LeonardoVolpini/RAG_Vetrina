@@ -20,7 +20,7 @@ def get_llm(provider: str, model_name: str):
         return ChatGoogleGenerativeAI(
             model=model_name or "models/gemini-1.5-flash-latest",
             google_api_key=settings.GEMINI_API_KEY,
-            temperature=0.7,
+            temperature=0.3,
         )
     elif provider == 'llama':        
         if not model_name:
@@ -33,7 +33,7 @@ def get_llm(provider: str, model_name: str):
             model=model_name,
             openai_api_key=settings.LLAMA_API_KEY,
             openai_api_base=settings.LLAMA_API_BASE,
-            temperature=0.6,
+            temperature=0.3,
             max_tokens=512
         )
     else:
@@ -124,14 +124,12 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
     """
     Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici
     """
-    # MMR retriever per migliore diversità nei risultati
+    # Retriever configurato per massima precisione (similarity search)
     retriever = store.as_retriever(
-        search_type="mmr",  # Maximum Marginal Relevance per diversità
+        search_type="similarity",  # Ricerca standard basata sulla similarità
         search_kwargs={
-            "k": 3,         # Recupera più documenti
-            "fetch_k": 20,  # Considera più candidati
-            "lambda_mult": 0.9,  # Bilancia rilevanza e diversità
-            "score_threshold": 0.85  # Solo documenti molto rilevanti
+            "k": 3,                 
+            "score_threshold": 0.1
         }
     )
     
@@ -176,6 +174,11 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
         def _get_docs(self, question: str, *, run_manager=None):
             """Override per includere few-shot examples nella chiamata"""
             docs = super()._get_docs(question, run_manager=run_manager)
+            
+            # Stampa i documenti selezionati dal retriever
+            print("Documenti selezionati dal retriever:")
+            for i, doc in enumerate(docs):
+                print(f"[{i+1}] {getattr(doc, 'page_content', str(doc))[:500]}")  # Mostra i primi 500 caratteri
             
             # Aggiungi few-shot examples se abilitati
             if self.use_few_shot and self.example_manager:
@@ -237,7 +240,6 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
         use_few_shot=use_few_shot,
         max_examples=max_examples
     )
-
 
 def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo',
                     use_few_shot: bool = True, max_examples: int = 3):

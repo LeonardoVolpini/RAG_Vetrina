@@ -113,7 +113,7 @@ def get_embeddings(provider='openai'):
     Supporta OpenAI, Google Generative AI (per Gemini) e Llama.
     """
     if provider == 'openai':
-        return OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=settings.OPENAI_API_KEY)
+        return OpenAIEmbeddings(model="text-embedding-3-large", openai_api_key=settings.OPENAI_API_KEY)
     elif provider == 'gemini':
         return GeminiEmbeddings()
     elif provider == 'llama':
