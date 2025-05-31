@@ -382,3 +382,5 @@ async def preview_few_shot_prompt(max_examples: int = 3, query: str = "esempio d
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    #Lunch with: uvicorn api:app --reload --port 8000
