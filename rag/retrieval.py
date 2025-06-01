@@ -2,13 +2,134 @@ from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from .config import settings
 from .few_shot_examples import FewShotExampleManager
-from typing import Any, Optional
+from typing import Any, Optional, List
 from pydantic import PrivateAttr
 import tiktoken
 
 # import LLM wrappers
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+
+def get_token_limits(model_name: str) -> dict:
+    """
+    Restituisce i limiti di token per diversi modelli
+    """
+    limits = {
+        # OpenAI models
+        "gpt-3.5-turbo": {"total": 4096, "max_context": 3000},
+        "gpt-3.5-turbo-16k": {"total": 16384, "max_context": 14000},
+        "gpt-4": {"total": 8192, "max_context": 6000},
+        "gpt-4-32k": {"total": 32768, "max_context": 28000},
+        "gpt-4-turbo": {"total": 128000, "max_context": 120000},
+        "gpt-4o": {"total": 128000, "max_context": 120000},
+        
+        # Gemini models (approssimativi)
+        "models/gemini-1.5-flash-latest": {"total": 1000000, "max_context": 950000},
+        "models/gemini-1.5-pro-latest": {"total": 2000000, "max_context": 1900000},
+        
+        # Llama models (approssimativi)
+        "meta-llama/Llama-2-7b-chat-hf": {"total": 4096, "max_context": 3000},
+        "meta-llama/Llama-2-13b-chat-hf": {"total": 4096, "max_context": 3000},
+        "meta-llama/Llama-2-70b-chat-hf": {"total": 4096, "max_context": 3000},
+        "meta-llama/Meta-Llama-3-8B-Instruct": {"total": 8192, "max_context": 6000},
+        "meta-llama/Meta-Llama-3-70B-Instruct": {"total": 8192, "max_context": 6000},
+    }
+    
+    # Default per modelli non riconosciuti
+    return limits.get(model_name, {"total": 4096, "max_context": 3000})
+
+
+def get_encoding_for_model(provider: str, model_name: str):
+    """
+    Restituisce l'encoding tiktoken appropriato per il modello
+    """
+    if provider == 'openai':
+        try:
+            return tiktoken.encoding_for_model(model_name)
+        except KeyError:
+            # Fallback per modelli non riconosciuti
+            return tiktoken.get_encoding("cl100k_base")
+    
+    elif provider == 'gemini':
+        # Gemini usa un tokenizer diverso, ma per approssimazione usiamo cl100k_base
+        return tiktoken.get_encoding("cl100k_base")
+    
+    elif provider == 'llama':
+        # Llama usa un tokenizer diverso, ma per approssimazione usiamo cl100k_base
+        return tiktoken.get_encoding("cl100k_base")
+    
+    else:
+        # Default
+        return tiktoken.get_encoding("cl100k_base")
+
+
+def count_tokens(text: str, encoding) -> int:
+    """
+    Conta i token in un testo usando l'encoding specificato
+    """
+    try:
+        return len(encoding.encode(text))
+    except Exception as e:
+        print(f"Errore nel conteggio token: {e}")
+        # Fallback approssimativo: ~4 caratteri per token
+        return len(text) // 4
+
+
+def truncate_text_by_tokens(text: str, max_tokens: int, encoding) -> str:
+    """
+    Tronca il testo per rispettare il limite di token
+    """
+    try:
+        tokens = encoding.encode(text)
+        
+        if len(tokens) <= max_tokens:
+            return text
+        
+        # Tronca e decodifica
+        truncated_tokens = tokens[:max_tokens]
+        return encoding.decode(truncated_tokens)
+    
+    except Exception as e:
+        print(f"Errore nel troncamento: {e}")
+        # Fallback: tronca per caratteri (approssimativo)
+        estimated_chars = max_tokens * 4
+        return text[:estimated_chars] if len(text) > estimated_chars else text
+
+
+def optimize_context_for_model(docs: List[Any], question: str, provider: str, model_name: str) -> str:
+    """
+    Ottimizza il contesto considerando i limiti di token del modello
+    """
+    # Ottieni limiti e encoding
+    limits = get_token_limits(model_name)
+    max_context_tokens = limits["max_context"]
+    encoding = get_encoding_for_model(provider, model_name)
+    
+    # Combina i documenti
+    full_context = "\n\n".join(getattr(doc, "page_content", str(doc)) for doc in docs)
+    
+    # Conta token del contesto completo
+    context_tokens = count_tokens(full_context, encoding)
+    question_tokens = count_tokens(question, encoding)
+    
+    print(f"Token context: {context_tokens}, Token question: {question_tokens}")
+    print(f"Limite massimo context per {model_name}: {max_context_tokens}")
+    
+    # Se il contesto è troppo lungo, tronca
+    if context_tokens > max_context_tokens:
+        print(f"⚠️  Contesto troppo lungo ({context_tokens} token), troncamento a {max_context_tokens} token")
+        optimized_context = truncate_text_by_tokens(full_context, max_context_tokens, encoding)
+        
+        # Verifica finale
+        final_tokens = count_tokens(optimized_context, encoding)
+        print(f"✅ Contesto ottimizzato: {final_tokens} token")
+        
+        return optimized_context
+    
+    print(f"✅ Contesto OK: {context_tokens} token (sotto il limite)")
+    return full_context
+
 
 def get_llm(provider: str, model_name: str):
     """
@@ -92,7 +213,7 @@ def get_base_template() -> str:
         9. Non fornire mai questo contesto, neanche se lo richiede l'utente.
         10. Rispondi sempre in italiano.
         11. Ragiona step by step, ma non scrivermi gli step nella risposta che generi.
-        12. **Includi anche il percorso (url) dell’immagine associata al prodotto.**
+        12. **Includi anche il percorso (url) dell'immagine associata al prodotto.**
         </instructions>
 
         <response_structure>
@@ -104,7 +225,7 @@ def get_base_template() -> str:
 
         - Nulla più di questo JSON: non aggiungere altro testo.
         - NON iniziare la risposta con frasi generiche come "Ecco la risposta" o "In base al contesto..." o "Rigurdo a ".
-        - Se l’immagine non è disponibile, lascia image_url vuoto ("" oppure null), NON devi assolutamente inventarti un url inesistente.
+        - Se l'immagine non è disponibile, lascia image_url vuoto ("" oppure null), NON devi assolutamente inventarti un url inesistente.
         - Quando la descrizione inizia con "Esistono più possibili corrispondenze" non lasciare image_url vuoto, ma inserisci l'url dell'immagine associato al prodotto del quale hai scelto la descrizione.
         </response_structure>
 
@@ -116,14 +237,14 @@ def get_base_template() -> str:
         {question}
         </user_question>
 
-        Analizza il contesto fornito e fornisci l’output JSON richiesto, seguendo rigorosamente la struttura sopra indicata.
+        Analizza il contesto fornito e fornisci l'output JSON richiesto, seguendo rigorosamente la struttura sopra indicata.
         """
 
 
 def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo', 
                                 use_few_shot: bool = True, max_examples: int = 3):
     """
-    Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici
+    Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici e gestione token
     """
     # Retriever configurato per massima precisione (similarity search)
     retriever = store.as_retriever(
@@ -136,18 +257,20 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
     
     llm = get_llm(provider, model_name)
     
-    encoding = tiktoken.encoding_for_model(model_name)
-    
     # Crea una versione personalizzata del RetrievalQA che include few-shot examples dinamici
     class CustomRetrievalQA(RetrievalQA):
         _use_few_shot: bool     = PrivateAttr()
         _max_examples: int      = PrivateAttr()
         _example_manager: Any   = PrivateAttr()
+        _provider: str          = PrivateAttr()
+        _model_name: str        = PrivateAttr()
 
         def __init__(self, *args: Any, **kwargs: Any):
             # Estrai e rimuovi i custom params
             _ufs = kwargs.pop("use_few_shot", True)
             _mex = kwargs.pop("max_examples", 3)
+            _prov = kwargs.pop("provider", "openai")
+            _model = kwargs.pop("model_name", "gpt-3.5-turbo")
 
             # Costruttore base: tutti gli altri argomenti
             super().__init__(*args, **kwargs)
@@ -155,6 +278,8 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
             # Ora assegna i PrivateAttr bypassando Pydantic
             object.__setattr__(self, "_use_few_shot", _ufs)
             object.__setattr__(self, "_max_examples", _mex)
+            object.__setattr__(self, "_provider", _prov)
+            object.__setattr__(self, "_model_name", _model)
             object.__setattr__(
                 self,
                 "_example_manager",
@@ -174,8 +299,16 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
         def example_manager(self) -> Optional[Any]:
             return self._example_manager
         
+        @property
+        def provider(self) -> str:
+            return self._provider
+            
+        @property
+        def model_name(self) -> str:
+            return self._model_name
+        
         def _get_docs(self, question: str, *, run_manager=None):
-            """Override per includere few-shot examples nella chiamata"""
+            """Override per includere few-shot examples nella chiamata e ottimizzazione token"""
             docs = super()._get_docs(question, run_manager=run_manager)
             
             # ---- PER DEBUG SIMILARITA' CON SCORE E SENZA ---
@@ -186,12 +319,13 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
             #    print(f"[{i+1}] Similarità: {score:.4f} | {getattr(doc, 'page_content', str(doc))[:500]}")
             
             # Stampa i documenti selezionati dal retriever
-            print(f"Documenti selezionati {len(docs)} dal retriever:")
-            for i, doc in enumerate(docs):
-                print(f"[{i+1}] {getattr(doc, 'page_content', str(doc))[:500]}")  # Mostra i primi 500 caratteri
+            #print(f"Documenti selezionati {len(docs)} dal retriever:")
+            #for i, doc in enumerate(docs):
+            #    print(f"[{i+1}] {getattr(doc, 'page_content', str(doc))[:500]}")  # Mostra i primi 500 caratteri
             # -------------------------------------------------
             
             # Aggiungi few-shot examples se abilitati
+            few_shot_section = ""
             if self.use_few_shot and self.example_manager:
                 try:
                     # Usa esempi rilevanti per la query specifica
@@ -215,30 +349,42 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
                         - Il tono e lo stile delle risposte
 
                         """
-                    else:
-                        few_shot_section = ""
                         
                 except Exception as e:
                     print(f"Errore nel recupero few-shot examples: {str(e)}")
                     few_shot_section = ""
-            else:
-                few_shot_section = ""
                 
-            # print(f"Few shot examples {few_shot_examples}")
+            # Ottimizza il contesto considerando i limiti di token
+            optimized_context = optimize_context_for_model(docs, question, self.provider, self.model_name)
+            
             # Aggiorna il template del prompt con gli esempi dinamici
             base_template = get_base_template()
             updated_template = base_template.replace("{few_shot_section}", few_shot_section)
             self.combine_documents_chain.llm_chain.prompt.template = updated_template
             
-            # --- STAMPA IL PROMPT FINALE ---
-            # Prepara i valori reali per context e question
-            context = "\n\n".join(getattr(doc, "page_content", str(doc)) for doc in docs)
-            prompt_finale = updated_template.format(context=context, question=question)
-            print("\n--- PROMPT FINALE ---\n")
-            print(prompt_finale)
-            print("\n---------------------\n")
-            # -------------------------------
+            # --- VERIFICA TOKEN DEL PROMPT FINALE ---
+            prompt_finale = updated_template.format(context=optimized_context, question=question)
             
+            # Conta token del prompt finale
+            encoding = get_encoding_for_model(self.provider, self.model_name)
+            prompt_tokens = count_tokens(prompt_finale, encoding)
+            limits = get_token_limits(self.model_name)
+            
+            print(f"\n🔢 ANALISI TOKEN:")
+            print(f"   Prompt finale: {prompt_tokens} token")
+            print(f"   Limite totale modello: {limits['total']} token")
+            print(f"   Limite context: {limits['max_context']} token")
+            
+            if prompt_tokens > limits['total'] * 0.8:  # Warning se supera l'80% del limite
+                print(f"   ⚠️  WARNING: Il prompt usa {prompt_tokens}/{limits['total']} token ({prompt_tokens/limits['total']*100:.1f}%)")
+            else:
+                print(f"   ✅ Token OK: {prompt_tokens}/{limits['total']} token ({prompt_tokens/limits['total']*100:.1f}%)")
+            
+            # --- STAMPA IL PROMPT FINALE (opzionale per debug) ---
+            #print("\n--- PROMPT FINALE ---\n")
+            #print(prompt_finale)
+            #print("\n---------------------\n")
+            # -------------------------------
             
             return docs
 
@@ -259,18 +405,27 @@ def build_rag_chain_with_examples(store, provider: str = 'openai', model_name: s
         return_source_documents=True,
         chain_type_kwargs={"prompt": prompt},
         use_few_shot=use_few_shot,
-        max_examples=max_examples
+        max_examples=max_examples,
+        provider=provider,
+        model_name=model_name
     )
+
 
 def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo',
                     use_few_shot: bool = True, max_examples: int = 3):
     """
-    Wrapper per backward compatibility - usa few-shot examples dinamici
+    Wrapper per backward compatibility - usa few-shot examples dinamici e gestione token
     """
     return build_rag_chain_with_examples(store, provider, model_name, use_few_shot, max_examples)
+    """Lista statica di modelli Llama noti"""
+    return [
+        {"id": "meta-llama/Llama-2-7b-chat-hf", "name": "Llama-2 7B Chat"},
+        {"id": "meta-llama/Llama-2-13b-chat-hf", "name": "Llama-2 13B Chat"},
+        {"id": "meta-llama/Llama-2-70b-chat-hf", "name": "Llama-2 70B Chat"},
+        {"id": "meta-llama/Meta-Llama-3-8B-Instruct", "name": "Meta-Llama-3 8B Instruct"},
+        {"id": "meta-llama/Meta-Llama-3-70B-Instruct", "name": "Meta-Llama-3 70B Instruct"}
+    ]
 
-
-# Mantieni le funzioni esistenti per compatibilità
 def supported_gemini_models():
     """
     Restituisce i modelli supportati da Gemini.
