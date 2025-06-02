@@ -179,7 +179,13 @@ Risposta: {example['answer']}"""
             examples_store = FAISS.from_documents(example_docs, embeddings)
             
             # Trova gli esempi più simili alla query
-            similar_examples = examples_store.similarity_search(query, k=min(max_examples, len(example_docs)))
+            #similar_examples = examples_store.similarity_search(query, k=min(max_examples, len(example_docs)))
+            
+            similar_examples = examples_store.max_marginal_relevance_search(
+                query, 
+                k=min(max_examples, len(example_docs)), 
+                fetch_k=len(example_docs)
+            )
             
             formatted_examples = []
             for i, sim_doc in enumerate(similar_examples, 1):
