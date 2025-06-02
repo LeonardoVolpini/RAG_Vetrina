@@ -119,9 +119,9 @@ async def ask(request: AskRequest):
     elif provider == 'llama':
         model = request.model_name or 'llama-model'
 
-    use_few_shot = request.use_few_shot or True
+    use_few_shot = request.use_few_shot
     max_examples = request.max_examples or 3
-    
+
     # Crea una chiave cache
     cache_key = f"{request.query}_{provider}_{model}_{use_few_shot}"
     
