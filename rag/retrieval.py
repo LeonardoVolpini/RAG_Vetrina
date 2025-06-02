@@ -17,7 +17,7 @@ def get_token_limits(model_name: str) -> dict:
     """
     limits = {
         # OpenAI models
-        "gpt-3.5-turbo": {"total": 4096, "max_context": 3000},
+        "gpt-3.5-turbo": {"total": 8192, "max_context": 6000},
         "gpt-3.5-turbo-16k": {"total": 16384, "max_context": 14000},
         "gpt-4": {"total": 8192, "max_context": 6000},
         "gpt-4-32k": {"total": 32768, "max_context": 28000},
@@ -231,7 +231,7 @@ def get_llm(provider: str, model_name: str):
     provider: 'openai', 'gemini' o 'llama'
     """
     if provider == 'openai':
-        return ChatOpenAI(model=model_name or "gpt-3.5-turbo", openai_api_key=settings.OPENAI_API_KEY)
+        return ChatOpenAI(model=model_name or "gpt-4o-mini", openai_api_key=settings.OPENAI_API_KEY)
     elif provider == 'gemini':
         return ChatGoogleGenerativeAI(
             model=model_name or "models/gemini-1.5-flash-latest",
@@ -335,7 +335,7 @@ def get_base_template() -> str:
         """
 
 
-def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo', 
+def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_name: str = 'gpt-4o-mini', 
                                         use_few_shot: bool = True, max_examples: int = 3):
     """
     Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici e gestione token
@@ -364,7 +364,7 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
             _ufs = kwargs.pop("use_few_shot", True)
             _mex = kwargs.pop("max_examples", 3)
             _prov = kwargs.pop("provider", "openai")
-            _model = kwargs.pop("model_name", "gpt-3.5-turbo")
+            _model = kwargs.pop("model_name", "gpt-4o-mini")
 
             # Costruttore base: tutti gli altri argomenti
             super().__init__(*args, **kwargs)
@@ -413,9 +413,9 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
             #    print(f"[{i+1}] Similarità: {score:.4f} | {getattr(doc, 'page_content', str(doc))[:500]}")
             
             # Stampa i documenti selezionati dal retriever
-            #print(f"Documenti selezionati {len(docs)} dal retriever:")
-            #for i, doc in enumerate(docs):
-            #    print(f"[{i+1}] {getattr(doc, 'page_content', str(doc))[:500]}")  # Mostra i primi 500 caratteri
+            print(f"Documenti selezionati {len(docs)} dal retriever:")
+            for i, doc in enumerate(docs):
+                print(f"[{i+1}] {getattr(doc, 'page_content', str(doc))[:500]}")  # Mostra i primi 500 caratteri
             # -------------------------------------------------
             
             # Aggiungi few-shot examples se abilitati
@@ -487,7 +487,7 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
     )
 
 
-def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-3.5-turbo',
+def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-4o-mini',
                     use_few_shot: bool = True, max_examples: int = 3):
     """
     Wrapper per backward compatibility con ottimizzazione tiktoken migliorata

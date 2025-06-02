@@ -113,7 +113,7 @@ async def ask(request: AskRequest):
     
     # Determinazione del modello di default in base al provider
     if provider == 'openai':
-        model = request.model_name or 'gpt-3.5-turbo'
+        model = request.model_name or 'gpt-4o-mini'
     elif provider == 'gemini':
         model = request.model_name or 'gemini-models/gemini-1.5-pro-latest'
     elif provider == 'llama':
@@ -207,7 +207,7 @@ async def get_models(provider: str):
     elif provider == 'openai':
         return {
             "provider": provider, 
-            "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
+            "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4o-mini"]
         }
 
 
