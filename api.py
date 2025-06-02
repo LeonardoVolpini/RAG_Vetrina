@@ -204,10 +204,6 @@ async def get_models(provider: str):
         from rag.retrieval import supported_gemini_models
         models = supported_gemini_models()
         return {"provider": provider, "models": [m.name for m in models if "generateContent" in m.supported_generation_methods]}
-    elif provider == 'llama':
-        from rag.retrieval import supported_llama_models
-        models = supported_llama_models()
-        return {"provider": provider, "models": [m["id"] for m in models]}
     elif provider == 'openai':
         return {
             "provider": provider, 
