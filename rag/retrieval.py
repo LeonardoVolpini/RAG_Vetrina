@@ -281,53 +281,91 @@ def get_base_template() -> str:
 
         <reasoning>
         1.  **Analisi Iniziale della User Question:**
-            a. Estrai una potenziale `sigla_query` dalla <user_question> (es. "GS9987X"). Se non è chiaramente una sigla, considerala vuota.
-            b. Estrai il `brand_query` dalla <user_question> (es. "Yamato"). Se non presente, consideralo vuoto.
-            c. Estrai le `parole_chiave_nome_query` dalla <user_question> (es. "Avviatore ad impulsi", "Betoniera"). Il nome è quasi sempre un prodotto di edilizia.
+            a. Estrai una potenziale `sigla_query` dalla <user_question> (es. "GS9987X", codici alfanumerici specifici). Se non è chiaramente una sigla, considerala vuota.
+            b. Estrai il `brand_query` dalla <user_question> (es. "Yamato", "AEG", "Bosch"). Se non presente, consideralo vuoto.
+            c. Estrai tutti i `termini_ricerca` dalla `<user_question>` che rappresentano:
+                - Nomi di prodotti/strumenti (es. "trapano", "avvitatore", "smerigliatrice")
+                - Categorie merceologiche (es. "fissativo", "silicone", "colla")
+                - Materiali (es. "acciaio", "PVC", "cemento")
+                - Applicazioni/usi (es. "per legno", "impermeabile", "esterno")
+                - Caratteristiche tecniche (es. "18V", "cordless", "professionale", "400W")
 
         2.  **Processo di Ricerca e Selezione nel Contesto:**
-            a. **Fase 1: Tentativo di Match con Sigla (solo se `sigla_query` è presente e non vuota):**
-                i.   Se `sigla_query` è presente e non vuota:
-                    Identifica `Candidati_Sigla`: prodotti nel <document_context> la cui sigla interna (o codice identificativo nel nome) corrisponde ESATTAMENTE a `sigla_query`. 
-                    Se `brand_query` è presente e non vuoto, i `Candidati_Sigla` devono anche corrispondere al `brand_query`.
-                    - **Se `Candidati_Sigla` contiene ESATTAMENTE UN prodotto:** Questo è il prodotto scelto. Procedi direttamente al punto 3 (Generazione Output JSON).
-                    - **Se `Candidati_Sigla` contiene PIÙ DI UN prodotto:** La risposta sarà "Esistono più possibili corrispondenze per [nome prodotto completo nella query]. Descrizione scelta:". Scegli arbitrariamente uno dei prodotti da `Candidati_Sigla` come prodotto scelto. Procedi al punto 3.
-                    - **Se `Candidati_Sigla` è VUOTO:** La ricerca specifica per sigla è fallita. Annota questo stato (`sigla_specifica_fallita = true`) e procedi alla Fase 2.
-                ii.  Se `sigla_query` è assente o vuota: `sigla_specifica_fallita = false`. Procedi direttamente alla Fase 2.
+            a. **Fase 1: Tentativo di Match con Sigla (solo se `sigla_query` è presente):**
+                i. Identifica `Candidati_Sigla`: prodotti nel <document_context> la cui sigla interna corrisponde ESATTAMENTE a `sigla_query`. 
+                ii. Se `brand_query` è presente, filtra per brand corrispondente.
+                iii. **Se `Candidati_Sigla` contiene ESATTAMENTE UN prodotto:** Questo è il prodotto scelto. Procedi direttamente al punto 3 (Generazione Output JSON).
+                iv. **Se `Candidati_Sigla` contiene PIÙ DI UN prodotto:** La risposta sarà "Esistono più possibili corrispondenze per [nome prodotto completo nella query]. Descrizione scelta:". Scegli arbitrariamente uno dei prodotti da `Candidati_Sigla` come prodotto scelto. Procedi al punto 3.
+                v. **Se `Candidati_Sigla` è VUOTO:** La ricerca specifica per sigla è fallita. Procedi alla Fase 2.
 
             b. **Fase 2: Match per Nome e Marca:**
-                i.   Identifica `Candidati_Nome_Marca`: prodotti nel <document_context> che soddisfano i seguenti criteri:
-                    - Il loro brand interno corrisponde a `brand_query` (se `brand_query` non è vuoto; altrimenti considera tutti i brand).
-                    - Per ogni prodotto nel contesto, calcola compatibilità con parole_chiave_query:
-                        Match diretto: Nome/descrizione contiene esattamente il termine
-                        Match sinonimico: Termini equivalenti (es. "avvitatore" <-> "trapano avvitatore")
-                        Match categorico: Termine generico che include il prodotto (es. "utensile" include "trapano")
-                        Match funzionale: Stessa applicazione (es. "per forare" <-> "trapano")
-                        Espansione Terminologica:
-                            Cerca varianti linguistiche dei termini_ricerca
-                            Considera abbreviazioni e forme colloquiali
-                            Include categorie parent (es. "elettroutensile" per "trapano")
-                        Match Parziale:
-                            Accetta prodotti che matchano almeno 1 termine significativo
-                            Privilegia match su nome prodotto vs descrizione
-                ii.  **Se `Candidati_Nome_Marca` è VUOTO:**
-                    - (Implica che anche `Candidati_Sigla` era vuoto o la ricerca per sigla non era applicabile).
-                    La risposta sarà "Non lo so". Non c'è un prodotto scelto. Procedi al punto 3.
-                iii. **Se `Candidati_Nome_Marca` contiene ESATTAMENTE UN prodotto:**
-                    - Se `sigla_specifica_fallita` è `true` (cioè `sigla_query` era presente ma non ha trovato corrispondenze esatte): La risposta sarà "Esistono più possibili corrispondenze per [nome prodotto completo nella query]. Descrizione scelta:". Scegli questo unico prodotto da `Candidati_Nome_Marca` come prodotto scelto. Procedi al punto 3.
-                    - Se `sigla_specifica_fallita` è `false` (cioè `sigla_query` era assente/vuota): Questo è il prodotto scelto (match diretto nome/marca senza ambiguità precedente). Procedi al punto 3.
-                iv. **Se `Candidati_Nome_Marca` contiene PIÙ DI UN prodotto:**
-                    La risposta sarà "Esistono più possibili corrispondenze per [nome prodotto completo nella query]. Descrizione scelta:". Scegli arbitrariamente uno dei prodotti da `Candidati_Nome_Marca` come prodotto scelto. Procedi al punto 3.
-
+                i.   Identifica `Candidati_Semantici` attraverso matching flessibile:
+                    - **Match per Brand (se specificato)**:
+                        - Filtra prodotti che corrispondono a `brand_query` (se `brand_query` non è vuoto; altrimenti considera tutti i brand).
+                    - **Match per Termini Multipli:**
+                        - Per ogni prodotto nel contesto, calcola compatibilità con `termini_ricerca`:
+                            - **Match diretto**: Nome/descrizione contiene esattamente il termine
+                            - **Match sinonimico**: Termini equivalenti (es. "avvitatore" <-> "trapano avvitatore")
+                            - **Match categorico**: Termine generico che include il prodotto (es. "utensile" include "trapano")
+                            - **Match funzionale**: Stessa applicazione (es. "per forare" <-> "trapano")
+                    - **Scoring di Rilevanza**:
+                        - Assegna punteggio basato su:
+                            - Numero di termini che matchano
+                            - Tipo di match (diretto > sinonimico > categorico > funzionale)
+                            - Presenza di brand corrispondente (+bonus elevato)
+                            - Completezza della corrispondenza
+                ii. **Selezione Candidati:**
+                    - Ordina per punteggio di rilevanza
+                    - Considera candidati con punteggio > soglia minima
+                    - Se nessun candidato sopra soglia: vai alla Fase 3
+                    
+            c. **Fase 3: Match Esplorativo:**
+                Se le fasi precedenti falliscono, esegui ricerca espansiva:
+                i. **Espansione Terminologica**:
+                    - Cerca varianti linguistiche dei `termini_ricerca`
+                    - Considera abbreviazioni e forme colloquiali
+                    - Include categorie parent (es. "elettroutensile" per "trapano")
+                ii. **Match Parziale**:
+                    - Accetta prodotti che matchano almeno 1 termine significativo
+                    - Privilegia match su nome prodotto vs descrizione
+            
         3.  **Regole Finali per la Risposta (Generazione Output JSON):**
-            a. Se un "prodotto scelto" è stato identificato nelle fasi precedenti:
-                - Se la risposta determinata è del tipo "Esistono più possibili corrispondenze...": il campo `description` del JSON conterrà questa frase, seguita da "Descrizione scelta:" e la descrizione del "prodotto scelto".
-                - Altrimenti (match diretto): il campo `description` del JSON conterrà direttamente la descrizione del "prodotto scelto".
-                - Il campo `image_url` del JSON sarà l'URL immagine del "prodotto scelto". Se non disponibile, sarà `""` o `null`.
-            b. Se la risposta determinata è "Non lo so":
-                - Il campo `description` del JSON sarà "Non lo so".
-                - Il campo `image_url` del JSON sarà `""` o `null`.
-            c. Non inventare MAI dati tecnici, specifiche, nomi di prodotto o URL di immagini che non siano esplicitamente presenti nel <document_context> per il "prodotto scelto".
+            a. **Match Univoco o Miglior Candidato:**
+                ```
+                {{
+                    "description": "[descrizione dal document_context del prodotto scelto]",
+                    "image_url": "[url immagine dal document_context del prodotto scelto o empty string se non disponibile]",
+                }}
+                ```
+            b. ** Match Multipli Ambigui:**
+                ```
+                {{
+                    "description": "Esistono più possibili corrispondenze per [nome prodotto nella query]. Descrizione scelta: [descrizione del prodotto scelto]",
+                    "image_url": "[url immagine dal document_context del prodotto scelto, stesso della descrizion, o empty string se non disponibile]"
+                }}
+                ```
+            c. **Sigla Non Trovata ma Altri Match Disponibili:**
+                 ```
+                {{
+                    "description": "Esistono più possibili corrispondenze per [nome prodotto nella query]. Descrizione scelta: [descrizione del prodotto scelto]",
+                    "image_url": "[url immagine dal document_context del prodotto scelto, stesso della descrizion, o empty string se non disponibile]"
+                }}
+                ```
+            d. **Nessun Match (SOLO come ultima opzione):**
+                ```
+                {{
+                    "description": "Non lo so",
+                    "image_url": ""
+                }}
+                ```
+        
+        4. **Principi Guida Aggiuntivi:**
+            - **Privilegia sempre una risposta utile** anche se parzialmente corrispondente
+            - **"Non lo so" solo se veramente nessun prodotto nel contesto è collegabile alla query**
+            - In caso di dubbio scegli il prodotto più rilevante. 
+            - Description e image_url devono sempre provenire dal `<document_context>`
+            - Non inventare mai specificazioni non presenti nel contesto
+            - Se immagine non disponibile: campo vuoto, non URL inventato
         </reasoning>
 
         <uncertainty_handling>
@@ -356,8 +394,7 @@ def get_base_template() -> str:
         Restituisci la risposta strutturata come **JSON** con questi campi:
         {{
           "description": "<testo descrizione>",
-          "image_url": "<percorso/immagine.webp>",
-          "reasoning_steps": "<step di ragionamento che hai fatto>"
+          "image_url": "<percorso/immagine.webp>"
         }}
 
         - Nulla più di questo JSON: non aggiungere altro testo.
