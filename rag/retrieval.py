@@ -281,14 +281,16 @@ def get_base_template() -> str:
 
         <reasoning>
         1.  **Analisi Iniziale della User Question:**
-            a. Estrai una potenziale `sigla_query` dalla <user_question> (es. "GS9987X", codici alfanumerici specifici). Se non è chiaramente una sigla, considerala vuota.
+            a. Estrai una potenziale `sigla_query` dalla <user_question> (es. "GS9987X", "PN3500X", codici alfanumerici). Se non è chiaramente una sigla, considerala vuota.
             b. Estrai il `brand_query` dalla <user_question> (es. "Yamato", "AEG", "Bosch"). Se non presente, consideralo vuoto.
-            c. Estrai tutti i `termini_ricerca` dalla `<user_question>` che rappresentano:
+            c. Estrai tutti i `termini_ricerca` (non sono sigle) dalla `<user_question>` che rappresentano:
                 - Nomi di prodotti/strumenti (es. "trapano", "avvitatore", "smerigliatrice")
                 - Categorie merceologiche (es. "fissativo", "silicone", "colla")
                 - Materiali (es. "acciaio", "PVC", "cemento")
                 - Applicazioni/usi (es. "per legno", "impermeabile", "esterno")
-                - Caratteristiche tecniche (es. "18V", "cordless", "professionale", "400W")
+                - Caratteristiche tecniche:
+                    - Sia come parole specifiche, come: "cordless", "professionale", "alta potenza" ecc
+                    - Sia come unità di misura o dimensioni: "18V", "400W", "d. 10mm", "190x120", 4Ah" ecc
 
         2.  **Processo di Ricerca e Selezione nel Contesto:**
             a. **Fase 1: Tentativo di Match con Sigla (solo se `sigla_query` è presente):**
@@ -327,7 +329,7 @@ def get_base_template() -> str:
                     - Include categorie parent (es. "elettroutensile" per "trapano")
                 ii. **Match Parziale**:
                     - Accetta prodotti che matchano almeno 1 termine significativo
-                    - Privilegia match su nome prodotto vs descrizione
+                    - Privilegia match su 'name' vs 'description'
             
         3.  **Regole Finali per la Risposta (Generazione Output JSON):**
             a. **Match Univoco o Miglior Candidato:**
@@ -394,7 +396,8 @@ def get_base_template() -> str:
         Restituisci la risposta strutturata come **JSON** con questi campi:
         {{
           "description": "<testo descrizione>",
-          "image_url": "<percorso/immagine.webp>"
+          "image_url": "<percorso/immagine.webp>",
+          "reasoning_steps": "<step di ragionamento interni, estesi e dettagliati>"
         }}
 
         - Nulla più di questo JSON: non aggiungere altro testo.
