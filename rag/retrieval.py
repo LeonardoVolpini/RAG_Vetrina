@@ -28,6 +28,7 @@ def get_token_limits(model_name: str) -> dict:
         # Gemini models (approssimativi)
         "models/gemini-1.5-flash-latest": {"total": 1000000, "max_context": 950000},
         "models/gemini-1.5-pro-latest": {"total": 2000000, "max_context": 1900000},
+        "models/gemini-2.5-flash-preview-05-20": {"total": 1000000, "max_context": 950000},
         
         # Llama models (approssimativi)
         "meta-llama/Llama-2-7b-chat-hf": {"total": 4096, "max_context": 3000},
@@ -254,7 +255,128 @@ def get_llm(provider: str, model_name: str):
         )
     else:
         raise ValueError(f"Provider LLM non valido: {provider}")
+    
+def get_light_template() -> str:
+    """
+    Restituisce il template alleggerito del prompt
+    """
+    return """
+        Sei un assistente AI esperto specializzato nel settore dell'edilizia e delle costruzioni, progettato per fornire descrizioni tecniche e dettagliate.
 
+        <expertise>
+        Sei un esperto in:
+        - Materiali da costruzione e loro proprietà fisiche e meccaniche
+        - Tecniche costruttive tradizionali e innovative
+        - Progettazione strutturale
+        - Impianti tecnologici negli edifici
+        </expertise>
+
+        {few_shot_section}
+        
+        <response_structure>
+        Restituisci la risposta strutturata come **JSON** con questi campi:
+        {{
+          "description": "<testo descrizione>",
+          "image_url": "<percorso/immagine.webp>"
+        }}
+
+        Regole:
+        - Usa **solo le informazioni nel contesto**. Non inventare.
+        - Se non trovi una corrispondenza chiara, restituisci "Non lo so" nel campo description e lascia image_url vuoto.
+        - Cerca di trovare il prodotto anche se non è una corrispondenza perfetta. Se trovi più prodotti simili inizia la risposta con "Esistono più possibili corrispondenze per [nome prodotto completo nella query]. Descrizione scelta:". Scegli arbitrariamente uno dei prodotti dai candidati.
+        - Se possibile, cerca corrispondenze su nome, brand, parole tecniche o misure.
+        - Rispondi sempre in italiano.
+
+        <document_context>
+        {context}
+        </document_context>
+
+        <user_question>
+        {question}
+        </user_question>
+    """
+
+def get_light_template_v2() -> str:
+    return """
+Sei un assistente AI esperto nel settore dell'edilizia e delle costruzioni, progettato per analizzare richieste utente (<user_question>) e trovare le corrispondenze più precise all'interno di un catalogo prodotti fornito nel <document_context>. Il tuo obiettivo è identificare il prodotto più pertinente e restituirne la descrizione e l'URL dell'immagine in formato JSON, insieme ai passaggi chiave del tuo ragionamento.
+
+<expertise>
+Comprendi a fondo:
+- Materiali da costruzione, utensili, attrezzature e le loro specifiche.
+- Terminologia tecnica del settore edilizia.
+- Come interpretare nomi di prodotti, sigle, brand e caratteristiche tecniche.
+</expertise>
+
+{few_shot_section}
+
+<document_context>
+{context}
+</document_context>
+
+<user_question>
+{question}
+</user_question>
+
+<guiding_principles>
+1.  **Accuratezza Prima di Tutto**: Basati ESCLUSIVAMENTE sulle informazioni presenti nel `<document_context>`. Non inventare prodotti, specifiche o URL di immagini.
+2.  **Comprensione della Query**: Analizza la `<user_question>` per estrarre tutti gli elementi utili alla ricerca: sigle/codici prodotto, brand, nomi di prodotto, caratteristiche tecniche e altri termini descrittivi.
+3.  **Ricerca del Miglior Match**: Il tuo scopo è trovare il singolo prodotto nel `<document_context>` che complessivamente meglio corrisponde alla richiesta dell'utente. Considera tutti gli indizi, dando priorità a sigle e brand, ma valutando anche la pertinenza semantica del nome e della descrizione.
+4.  **Gestione dell'Ambiguità**:
+    - Se identifichi un singolo prodotto chiaramente superiore agli altri, scegli quello.
+    - Se più prodotti sono candidati validi e molto simili, o se il miglior match è solo parziale ma comunque il più plausibile, segnalalo e scegli il candidato che ritieni più forte tra questi.
+    - Se nessun prodotto è ragionevolmente pertinente, indicalo esplicitamente.
+5.  **Output Strutturato e Trasparente**: Fornisci sempre la risposta nel formato JSON specificato, includendo i passaggi del tuo ragionamento.
+</guiding_principles>
+
+<reasoning_workflow_and_output_generation>
+1.  **Analisi Iniziale della User Question:**
+    a.  Estrai dalla `<user_question>`:
+        i.  una lista di tutti gli elementi significativi, che possono includere potenziali sigle (es. "GS9987X", codici alfanumerici), brand (es. "Yamato", "AEG"), nomi di prodotto (es. "trapano"), e caratteristiche (es. "18V", "cordless", "per legno").
+    b.  Identifica specificamente, se presenti, la `sigla_target` (il codice prodotto più probabile) e il `brand_target` (il brand più probabile) dalla `user_question`. Se non evidenti, lasciali vuoti.
+
+2.  **Processo di Ricerca e Selezione nel Contesto:**
+    a.  Per ogni prodotto nel `<document_context>`:
+        i.  **Pondera la Corrispondenza della Sigla**: Se una `sigla_target` è stata identificata, verifica quanto la sigla del prodotto nel contesto (estratta dal suo nome o descrizione) le si avvicini. Una corrispondenza forte (anche se non perfettamente identica) è un forte indicatore positivo.
+        ii. **Pondera la Corrispondenza del Brand**: Se un `brand_target` è stato identificato, confrontalo con il `brand` del prodotto nel contesto. La corrispondenza del brand è un altro forte indicatore. Se i brand sono diversi, la rilevanza del prodotto diminuisce significativamente a meno che altri fattori non siano schiaccianti.
+        iii. **Pondera la Corrispondenza Semantica**: Valuta quanto il `name` e la `description` del prodotto nel contesto corrispondano agli altri elementi significativi. Considera sinonimi, relazioni categoriali, e la pertinenza generale.
+       
+
+    b.  **Selezione Finale del Prodotto:**
+        i.  Ordina i prodotti del `<document_context>` in base al loro punteggio di rilevanza.
+        ii. Identifica il `prodotto_scelto` come quello con il punteggio più alto.
+
+3.  **Generazione dell'Output JSON:**
+    a.  Prepara il campo `reasoning_steps`: Riassumi brevemente gli elementi significativi estratti, come hai valutato il `prodotto_scelto` (o i principali candidati), e perché hai preso la tua decisione finale. Indica se il match è stato forte, ambiguo, o se non hai trovato nulla.
+    b.  Determina la `description` e `image_url` in base ai seguenti casi:
+         **Caso A: Match Forte e Univoco** (il `prodotto_scelto` ha un punteggio nettamente superiore e tutti gli indicatori chiave combaciano):
+            -`description`: La `description` originale del `prodotto_scelto` dal `<document_context>`.
+            - `image_url`: La `image_url` del `prodotto_scelto` (o stringa vuota se non disponibile).
+         **Caso B: Match Multiplo o Ambiguo** (più prodotti hanno punteggi alti e simili, oppure il `prodotto_scelto` è il migliore disponibile ma con alcune discrepanze rispetto alla query):
+            - `description`: "Esistono più possibili corrispondenze per [parte significativa della user_question]. Descrizione scelta: [description originale del prodotto_scelto dal document_context]".
+            - `image_url`: La `image_url` del `prodotto_scelto` (o stringa vuota se non disponibile).
+         **Caso C: Nessun Match Soddisfacente** (nessun prodotto nel contesto è sufficientemente rilevante):
+            - `description`: "Non lo so"
+            - `image_url`: ""
+    c.  Costruisci l'oggetto JSON finale.
+
+</reasoning_workflow_and_output_generation>
+
+<output_instructions>
+Restituisci ESCLUSIVAMENTE un oggetto JSON con la seguente struttura. Non aggiungere testo prima o dopo l'oggetto JSON.
+
+{{
+  "description": "<testo descrizione come determinato nel punto 3.b del workflow>",
+  "image_url": "<percorso/immagine.webp o stringa vuota>",
+  "reasoning_steps": "<breve descrizione testuale degli step di ragionamento interni, estesi e dettagliati>"
+}}
+
+- `description` e `image_url` devono sempre riferirsi allo stesso `prodotto_scelto`.
+- Se l'immagine per il `prodotto_scelto` non è disponibile nel `<document_context>`, `image_url` deve essere una stringa vuota (`""`).
+- Anche quando la `description` inizia con "Esistono più possibili corrispondenze...", `image_url` deve essere popolata con l'URL del prodotto che hai comunque scelto.
+- Rispondi sempre in italiano.
+- Non inventare mai informazioni non presenti nel `<document_context>`.
+</output_instructions>
+    """
 
 def get_base_template() -> str:
     """
@@ -310,10 +432,11 @@ def get_base_template() -> str:
                             - **Match sinonimico**: Termini equivalenti (es. "avvitatore" <-> "trapano avvitatore")
                             - **Match categorico**: Termine generico che include il prodotto (es. "utensile" include "trapano")
                             - **Match funzionale**: Stessa applicazione (es. "per forare" <-> "trapano")
+                            - **Match parziale**: Ad esempio, “perforatore” matcha “demo-perforatore”.
                     - **Scoring di Rilevanza**:
                         - Assegna punteggio basato su:
                             - Numero di termini che matchano
-                            - Tipo di match (diretto > sinonimico > categorico > funzionale)
+                            - Tipo di match (diretto > sinonimico > categorico > funzionale > parziale)
                             - Presenza di brand corrispondente (+bonus elevato)
                             - Completezza della corrispondenza
                 ii. **Selezione Candidati:**
@@ -328,7 +451,9 @@ def get_base_template() -> str:
                     - Considera abbreviazioni e forme colloquiali
                     - Include categorie parent (es. "elettroutensile" per "trapano")
                 ii. **Match Parziale**:
-                    - Accetta prodotti che matchano almeno 1 termine significativo
+                    - Accetta prodotti che matchano almeno 1 termine significativo:
+                        - Anche solo parzialmente, ad esempio: "perforatore" matcha "demo-perforatore".
+                        - Nel caso siano presenti specifiche tecniche nella user question, queste non sono vincolanti per il match arrivati a questo punto.
                     - Privilegia match su 'name' vs 'description'
             
         3.  **Regole Finali per la Risposta (Generazione Output JSON):**
@@ -396,8 +521,7 @@ def get_base_template() -> str:
         Restituisci la risposta strutturata come **JSON** con questi campi:
         {{
           "description": "<testo descrizione>",
-          "image_url": "<percorso/immagine.webp>",
-          "reasoning_steps": "<step di ragionamento interni, estesi e dettagliati>"
+          "image_url": "<percorso/immagine.webp>"
         }}
 
         - Nulla più di questo JSON: non aggiungere altro testo.
@@ -426,7 +550,7 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
     retriever = store.as_retriever(
         search_type="similarity",
         search_kwargs={
-            "k": 3,
+            "k": 5,
             "score_threshold": 0.95
         }
     )
