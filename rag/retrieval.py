@@ -11,10 +11,10 @@ from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 # import prompts template
-from prompts.description_image_prompt import get_description_and_image_template
-from prompts.name_description_image_prompt import get_name_description_image_template
-from prompts.image_prompt import get_image_template
-from prompts.name_image_prompt import get_name_and_image_template
+from .prompts.description_image_prompt import get_description_and_image_template
+from .prompts.name_description_image_prompt import get_name_description_image_template
+from .prompts.image_prompt import get_image_template
+from .prompts.name_image_prompt import get_name_and_image_template
 
 def get_prompt_template(regenerateName: bool = False, generateDescription: bool = True) -> str:
     """
