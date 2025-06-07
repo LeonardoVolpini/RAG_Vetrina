@@ -92,7 +92,8 @@ def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provide
         return store
 
 def ask_query(query: str, store, provider: str, model_name: str,
-              use_few_shot: bool, max_examples: int):
+              use_few_shot: bool, max_examples: int,
+              regenerateName: bool, generateDescription: bool):
     """
     Esegue query RAG su indice già caricato con supporto per reasoning step-by-step.
     
@@ -103,6 +104,8 @@ def ask_query(query: str, store, provider: str, model_name: str,
         model_name: Nome del modello specifico
         use_few_shot: Se utilizzare few-shot examples
         max_examples: Numero massimo di esempi
+        regenerateName: Flag per decidere se rigenare anche il nome
+        generateDescription: Flag per decidere se generare la descrizione
     """
     # Validazione provider
     if provider not in ['openai', 'gemini', 'llama']:
@@ -110,7 +113,7 @@ def ask_query(query: str, store, provider: str, model_name: str,
         
     try:        
         rag_chain = build_rag_chain(
-            store, provider, model_name, use_few_shot, max_examples
+            store, provider, model_name, use_few_shot, max_examples, regenerateName, generateDescription
         )
         output = rag_chain.invoke(query)
         sources = [{

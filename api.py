@@ -30,6 +30,8 @@ class AskRequest(BaseModel):
     use_cache: bool = False
     use_few_shot: bool = True  # Nuovo parametro per controllare few-shot
     max_examples: int = 3      # Numero massimo di esempi da utilizzare
+    regenerateName: bool = False
+    generateDescription: bool = True
 
 class FewShotExample(BaseModel):
     question: str
@@ -121,6 +123,8 @@ async def ask(request: AskRequest):
 
     use_few_shot = request.use_few_shot
     max_examples = request.max_examples or 3
+    regenerateName = request.regenerateName
+    generateDescription = request.generateDescription
 
     # Crea una chiave cache
     cache_key = f"{request.query}_{provider}_{model}_{use_few_shot}"
@@ -136,7 +140,8 @@ async def ask(request: AskRequest):
     
     try:
         result = ask_query(request.query, store, provider, model,
-                            use_few_shot, max_examples)
+                            use_few_shot, max_examples,
+                            regenerateName, generateDescription)
         
     except Exception as e:
         import traceback
