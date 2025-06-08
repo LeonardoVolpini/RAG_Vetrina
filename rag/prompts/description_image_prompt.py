@@ -81,6 +81,7 @@ def get_description_and_image_template() -> str:
                 ```
                 {{
                     "description": "[descrizione dal document_context del prodotto scelto]",
+                    "brand": "[brand del prodotto scelto]",
                     "image_url": "[url immagine dal document_context del prodotto scelto o empty string se non disponibile]",
                 }}
                 ```
@@ -88,6 +89,7 @@ def get_description_and_image_template() -> str:
                 ```
                 {{
                     "description": "Esistono più possibili corrispondenze per [nome prodotto nella query]. Descrizione scelta: [descrizione del prodotto scelto]",
+                    "brand": "[brand del prodotto scelto, dal document_context del prodotto scelto]",
                     "image_url": "[url immagine dal document_context del prodotto scelto, stesso della descrizione, o empty string se non disponibile]"
                 }}
                 ```
@@ -95,6 +97,7 @@ def get_description_and_image_template() -> str:
                  ```
                 {{
                     "description": "Esistono più possibili corrispondenze per [nome prodotto nella query]. Descrizione scelta: [descrizione del prodotto scelto]",
+                    "brand": "[brand del prodotto scelto, dal document_context del prodotto scelto]",
                     "image_url": "[url immagine dal document_context del prodotto scelto, stesso della descrizione, o empty string se non disponibile]"
                 }}
                 ```
@@ -102,15 +105,16 @@ def get_description_and_image_template() -> str:
                 ```
                 {{
                     "description": "Non lo so",
+                    "brand": "",
                     "image_url": ""
                 }}
                 ```
         
         4. **Principi Guida Aggiuntivi:**
             - **Privilegia sempre una risposta utile** anche se parzialmente corrispondente
-            - **"Non lo so" solo se veramente nessun prodotto nel contesto è collegabile alla query**
+            - **"Non lo so" nella descrizione solo se veramente nessun prodotto nel contesto è collegabile alla query**
             - In caso di dubbio scegli il prodotto più rilevante. 
-            - Description e image_url devono sempre provenire dal `<document_context>`
+            - Description, brand e image_url devono sempre provenire dal `<document_context>`
             - Non inventare mai specificazioni non presenti nel contesto
             - Se immagine non disponibile: campo vuoto, non URL inventato
         </reasoning>
@@ -118,15 +122,15 @@ def get_description_and_image_template() -> str:
         <uncertainty_handling>
         - Se scatta il passo (2) con più di un match (più prodotti con lo stesso nome e brand), inizia la risposta della description con:  
           “Esistono più possibili corrispondenze per [nome prodotto nella query]”,  
-          poi scegli uno dei prodotti (arbitrariamente, ma se possibile sfrutta gli esempi) e fornisci la descrizione e il `image_url` relativi a quel prodotto.  
-        - Se scatta il passo (3), rispondi nella descrizione con: “Non lo so”, senza aggiungere altro testo. E lascia `image_url` vuoto.
+          poi scegli uno dei prodotti (arbitrariamente, ma se possibile sfrutta gli esempi) e fornisci la descrizione, il brand e `image_url` relativi a quel prodotto.  
+        - Se scatta il passo (3), rispondi nella descrizione con: “Non lo so”, senza aggiungere altro testo. E lascia `brand` `image_url` vuoti.
         </uncertainty_handling>
 
         <instructions>
         1. Fornisci risposte tecnicamente accurate basate **ESCLUSIVAMENTE** sul contesto fornito, non inventare.
         2. Struttura le informazioni in modo logico e progressivo.
         3. Usa terminologia tecnica appropriata ma spiega i concetti complessi quando necessario.
-        4. Se non hai informazioni sufficienti (né sigla né nome+brand), rispondi “Non lo so”.
+        4. Se non hai informazioni sufficienti (né sigla né nome+brand), rispondi “Non lo so” come descrizione.
         5. Non inventare mai dati tecnici, specifiche tecniche o riferimenti normativi.
         6. Non fare supposizioni su materiali, tecniche o prodotti non menzionati nel contesto.
         7. Evita di menzionare marchi commerciali a meno che non siano esplicitamente nella <user_question>.
@@ -135,19 +139,21 @@ def get_description_and_image_template() -> str:
         10. Rispondi sempre in italiano.
         11. Ragiona step by step internamente, ma **non scriverti gli step nella risposta**.
         12. **Includi anche il percorso (`image_url`) dell’immagine associata al prodotto**.
+        13. **Includi anche il `brand` associato al prodotto**.
         </instructions>
 
         <response_structure>
         Restituisci la risposta strutturata come **JSON** con questi campi:
         {{
           "description": "<testo descrizione>",
+          "brand": "<brand del prodotto scelto>",
           "image_url": "<percorso/immagine.webp>"
         }}
 
         - Nulla più di questo JSON: non aggiungere altro testo.
         - NON iniziare la risposta con frasi generiche come “Ecco la risposta” o “In base al contesto...”.
         - Se l’immagine non è disponibile, lascia `image_url` vuoto (`""` oppure `null`).
-        - Se la descrizione inizia con “Esistono più possibili corrispondenze”, **non lasciare `image_url` vuoto**: inserisci l’URL del prodotto che hai scelto.
+        - Se la descrizione inizia con “Esistono più possibili corrispondenze”, **non lasciare `brand` e `image_url` vuoti**: inserisci l’URL del prodotto che hai scelto.
         </response_structure>
 
         <document_context>

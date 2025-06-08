@@ -22,15 +22,19 @@ def get_prompt_template(regenerateName: bool = False, generateDescription: bool 
     """
     if (regenerateName and generateDescription):
         # Usa il template per nome, descrizione e immagine
+        print("🔄 Generazione nome, descrizione e immagine")
         template = get_name_description_image_template()
     elif regenerateName and not generateDescription:
         # Usa il template per nome e immagine
+        print("🔄 Generazione nome e immagine")
         template = get_name_and_image_template()
     elif not regenerateName and generateDescription:
         # Usa il template per descrizione e immagine
+        print("🔄 Generazione descrizione e immagine")
         template = get_description_and_image_template()
     else:
         # Usa il template per solo immagine
+        print("🔄 Generazione immagine")
         template = get_image_template()
     return template
 

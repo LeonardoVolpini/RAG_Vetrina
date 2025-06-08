@@ -42,14 +42,14 @@ class FewShotExampleManager:
                                         { "name": "CARTA ABRASIVA PER MOLLA - FDS 140. Abrasive Paper- Clamp Type for FDS 140", "brand": "AEG", "description": "Carta abrasiva preforata per legno, vernice, smalto e spatolato; Tipo di grana: ossido di alluminio legato con resina artificiale su carta speciale antistrappo; Ideale per legno e lavori di carrozzeria", "image_url": "/images/aeg_products/CARTA_ABRASIVA_PER_MOLLA_-_FDS_140_Abrasive_Paper-_Clamp_Type_for_FDS_140.webp"},
                                         { "name": "Martello demolitore 7 kg SDS-MAX MH 7E", "brand": "AEG", "description": "Potente motore da 1500 watt; Energia di impatto 10,5 J, per pesanti applicazioni di scalpellatura; La modalità di percussione morbida permette di ridurre l'energia battente per migliori risultati in materiali teneri; Il sistema di antivibrazione AVS permette di ridurre significativamente le vibrazioni, per un maggior comfort di utilizzo; Avviamento morbido per un'ottimale controllo della foratura; 'Luce service' indica la necessità di manutenzione; Indicatore luminoso di presenza della tensione", "image_url": "/images/aeg_products/Martello_demolitore_7_kg_SDS-MAX_MH_7E.webp" }
                                         ]""",
-                "question": "Genera per favore due informazioni: 1) Una descrizione commerciale tecnica per Smerigliatrice angolare Brushless 18V BEWS 18-125BL. 2) Il percorso (path) dell’immagine associata a questo prodotto. Restituisci l’output in questo formato: {{ \"description\": \"<testo descrizione>\", \"image_url\": \"<percorso/immagine.webp>\"}}",
+                "question": "Genera per favore tre informazioni: 1) Una descrizione commerciale tecnica per Smerigliatrice angolare Brushless 18V BEWS 18-125BL. 2) Il brand associato a questo prodotto 3) Il percorso (path) dell’immagine associata a questo prodotto. Restituisci l’output in questo formato: {{ \"description\": \"<testo descrizione>\",, \"brand\": \"<brand>\", \"image_url\": \"<percorso/immagine.webp>\"}}",
                 "reasoning": """
                                 1. Ho esaminato il contesto fornito e ho trovato due prodotti: una carta abrasiva e un martello demolitore.
                                 2. Nessuno di questi prodotti è una smerigliatrice angolare, quindi non posso generare una descrizione per un prodotto che non è presente nel contesto.
                                 3. Non posso inventare specifiche per un prodotto inesistente, quindi la risposta per la decrizione è "Non lo so."
-                                4. Di conseguenza lascio l'image url vuoto.
+                                4. Di conseguenza lascio brand e image url vuoti.
                             """,
-                "answer": "{{ \"description\": \"Non lo so.\", \"image_url\": \"\"}}"
+                "answer": "{{ \"description\": \"Non lo so.\", \"brand\": \"\", \"image_url\": \"\"}}"
             }
         ]
     
