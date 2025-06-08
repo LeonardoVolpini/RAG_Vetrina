@@ -266,7 +266,7 @@ def get_llm(provider: str, model_name: str):
         return ChatGoogleGenerativeAI(
             model=model_name or "models/gemini-1.5-flash-latest",
             google_api_key=settings.GEMINI_API_KEY,
-            temperature=0.3,
+            temperature=0,
         )
     elif provider == 'llama':        
         if not model_name:
@@ -279,7 +279,7 @@ def get_llm(provider: str, model_name: str):
             model=model_name,
             openai_api_key=settings.LLAMA_API_KEY,
             openai_api_base=settings.LLAMA_API_BASE,
-            temperature=0.3,
+            temperature=0,
             max_tokens=512
         )
     else:
