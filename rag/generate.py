@@ -4,8 +4,8 @@ from .embeddings import get_embeddings
 from .retrieval import build_rag_chain
 from .config import settings
 import os
-from typing import Dict, Any, Optional
-from langchain_community.vectorstores import FAISS
+from typing import Dict, Any, Optional, List
+from langchain_community.vectorstores import Chroma 
 
 def get_file_type(file_path: str) -> str:
     """Determina il tipo di file in base all'estensione"""
@@ -60,42 +60,51 @@ def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provide
         elif file_type == 'unknown':
             print(f"Tipo di file non supportato: {path}")
     
-    # Ottieni gli embeddings una sola volta per riuso
-    embeddings = get_embeddings(provider)
-    
     # Controlla se ci sono documenti da elaborare
     if not docs:
         raise ValueError("Nessun documento valido caricato per l'ingestione.")
-    
-    # Gestione dell'indice FAISS
-    if rebuild_index or not os.path.exists(settings.VECTOR_STORE_PATH):
-        # Crea un nuovo indice con i documenti caricati
-        print(f"Creazione di un nuovo indice con {len(docs)} documenti")
-        store = FAISS.from_documents(docs, embeddings)
-        store.save_local(settings.VECTOR_STORE_PATH)
-        return store
-    else:
-       # Aggiunta incrementale a un indice esistente
-        print(f"Aggiunta di {len(docs)} nuovi documenti all'indice esistente")
-        # Carica l'indice esistente con allow_dangerous_deserialization=True
-        store = FAISS.load_local(
-            settings.VECTOR_STORE_PATH, 
-            embeddings,
-            allow_dangerous_deserialization=True
-        )
-        
-        # Aggiungi i nuovi documenti all'indice
-        store.add_documents(docs)
-        
-        # Salva l'indice aggiornato
-        store.save_local(settings.VECTOR_STORE_PATH)
-        return store
+
+    # Ottieni gli embeddings una sola volta per riuso
+    embeddings = get_embeddings(provider)
+
+    # Percorso per il database persistente di Chroma
+    persist_directory = settings.VECTOR_STORE_PATH # Puoi riutilizzare lo stesso path
+
+    if rebuild_index and os.path.exists(persist_directory):
+        # Per Chroma, ricostruire significa cancellare la vecchia directory
+        import shutil
+        print(f"Ricostruzione richiesta, elimino la directory: {persist_directory}")
+        shutil.rmtree(persist_directory)
+
+    # Crea o carica il database Chroma
+    # Chroma gestisce l'indicizzazione ANN automaticamente
+    store = Chroma.from_documents(
+        documents=docs,
+        embedding=embeddings,
+        persist_directory=persist_directory
+    )
+
+    print(f"Ingestione completata. {len(docs)} documenti aggiunti/aggiornati.")
+    return store
+
+def _extract_brand_filter(query: str, known_brands: List[str]) -> Optional[Dict[str, Any]]:
+    """
+    Estrae una marca conosciuta dalla query e crea un dizionario di filtro per ChromaDB.
+    """
+    for brand in known_brands:
+        # Cerca la marca nella query (ignorando maiuscole/minuscole)
+        if f' {brand.lower()} ' in f' {query.lower()} ':
+            # Usa 'brand_normalized' creato in loader_csv.py
+            filter_dict = {"brand_normalized": brand.lower().replace(' ', '_')}
+            print(f"✅ Filtro per marca rilevato: {filter_dict}")
+            return filter_dict
+    return None
 
 def ask_query(query: str, store, provider: str, model_name: str,
               use_few_shot: bool, max_examples: int,
               regenerateName: bool, generateDescription: bool):
     """
-    Esegue query RAG su indice già caricato con supporto per reasoning step-by-step.
+    Esegue query RAG, applicando filtri dinamici per la marca se rilevata nella query.
     
     Args:
         query: Query utente
@@ -111,18 +120,50 @@ def ask_query(query: str, store, provider: str, model_name: str,
     if provider not in ['openai', 'gemini', 'llama']:
         raise ValueError(f"Provider non supportato: {provider}")
         
-    try:        
+    try:
+        # Marche conosciute
+        known_brands = [
+                    "abk", "aco", "aeg", "albatros", "alubel",
+                    "amonn", "appiani", "arblu", "bacchi", "bifire",
+                    "bigmat", "boero", "bosch", "colorificiotirreno",
+                    "cvr", "dakota", "delconca", "dewalt", "dorken",
+                    "duramitt", "edilferro", "ediltec", "einhell",
+                    "faraone", "fassabortolo", "fila", "firstcorporation",
+                    "fischer", "fitt", "gattoni", "hidra", "hilti",
+                    "icobit", "imer", "index", "isolmant", "isover",
+                    "itwitaly", "kapriol" , "karcher", "kerakoll", "knauf",
+                    "laticrete", "leca", "madras", "makita", "mapei",
+                    "maurer", "novellini", "oikos", "olympia", "onduline",
+                    "palazzetti", "papillon", "pastorelli", "poron",
+                    "profiltec", "ragno", "raimondi", "sait", "saniplast",
+                    "sanmarco", "schulz", "sika", "soprema", "spit",
+                    "unifix", "unishop", "upower", "ursa", "volteco",
+                    "weber", "yamato"                     
+                    ]
+        
+        filter_dict = _extract_brand_filter(query, known_brands)
+        
+        # Costruisci i search_kwargs
+        search_kwargs = {"k": 5, "score_threshold": 0.95}
+        if filter_dict:
+            search_kwargs["filter"] = filter_dict
+
         rag_chain = build_rag_chain(
-            store, provider, model_name, use_few_shot, max_examples, regenerateName, generateDescription
+            store, provider, model_name, use_few_shot, max_examples, 
+            regenerateName, generateDescription,
+            search_kwargs=search_kwargs
         )
+        
         output = rag_chain.invoke(query)
         sources = [{
             "page": d.metadata.get('page', None),
             "source_pdf": d.metadata.get('source_pdf', None),
             "source_file": d.metadata.get('source_file', None),
             "row_index": d.metadata.get('row_index', None),
-            "content_type": d.metadata.get('content_type', None)
+            "content_type": d.metadata.get('content_type', None),
+            "brand": d.metadata.get('brand', 'N/D')
         } for d in output.get('source_documents', [])]
+        
         return {
             "answer": output.get('result'), 
             "sources": sources

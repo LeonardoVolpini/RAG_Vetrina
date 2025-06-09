@@ -1,9 +1,19 @@
+import os
 from langchain.docstore.document import Document
 import pandas as pd
-import os
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
-def load_csv(file_path: str, header_row: int = 0, include_columns: Optional[List[str]] = None) -> List[Document]:
+def extract_brand_from_filename(filename: str) -> str:
+    """
+    Estrae la marca dal nome del file (prima parte prima di '_')
+    Es: 'yamato_products.csv' -> 'products'
+    """
+    basename = os.path.splitext(filename)[0]  # Rimuove estensione
+    brand = basename.split('_')[0].lower().strip()
+    return brand
+
+def load_csv(file_path: str, header_row: int = 0, 
+                                include_columns: Optional[List[str]] = None) -> List[Document]:
     """
     Carica un file CSV/Excel e lo converte in documenti utilizzabili per RAG.
     
@@ -18,67 +28,42 @@ def load_csv(file_path: str, header_row: int = 0, include_columns: Optional[List
     filename = os.path.basename(file_path)
     extension = os.path.splitext(filename)[1].lower()
     
+    # Estrai la marca dal nome del file
+    brand = extract_brand_from_filename(filename)
+    
     try:
-        # Carica il file con pandas
+        # Carica il file
         if extension in ['.xlsx', '.xls']:
             df = pd.read_excel(file_path, header=header_row)
-        else:  # Assume CSV per default o altro formato tabellare
+        else:
             df = pd.read_csv(file_path, header=header_row)
         
-        # Filtra colonne se specificato
         if include_columns:
             df = df[include_columns]
         
         docs = []
         
-        # Approccio 1: Un documento per riga con metadati
+        # Crea un documento per ogni riga con metadati di marca
         for index, row in df.iterrows():
-            # Converti la riga in testo
+            # Testo della riga
             row_text = " ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
             
             metadata = {
                 "source_file": filename,
                 "file_path": file_path,
                 "row_index": index,
-                "content_type": "tabular_data"
+                "content_type": "tabular_data",
+                "brand": brand,  # Metadato chiave per il filtering
+                "brand_normalized": brand.lower().replace(' ', '_')
             }
             
-            # Aggiungi valori di colonne chiave nei metadati per migliorare la ricerca
+            # Aggiungi valori delle colonne nei metadati
             for col, val in row.items():
                 if pd.notna(val):
                     safe_col_name = str(col).replace('.', '_').replace(' ', '_').lower()
                     metadata[f"col_{safe_col_name}"] = str(val)
             
             docs.append(Document(page_content=row_text, metadata=metadata))
-        
-        # Approccio 2: Un documento con panoramica statistica
-        if len(df) > 0:
-            # Crea una panoramica statistica per l'intero dataset
-            summary_parts = []
-            summary_parts.append(f"Sommario del file {filename}")
-            summary_parts.append(f"Numero totale di righe: {len(df)}")
-            summary_parts.append(f"Colonne: {', '.join(df.columns.tolist())}")
-            
-            # Aggiungi informazioni statistiche per colonne numeriche
-            numeric_cols = df.select_dtypes(include=['number']).columns
-            if len(numeric_cols) > 0:
-                summary_parts.append("\nStatistiche per colonne numeriche:")
-                for col in numeric_cols:
-                    if df[col].notna().any():
-                        summary_parts.append(f"  - {col}: min={df[col].min()}, max={df[col].max()}, media={df[col].mean():.2f}, mediana={df[col].median()}")
-            
-            # Crea un documento con il sommario
-            summary_text = "\n".join(summary_parts)
-            docs.append(Document(
-                page_content=summary_text,
-                metadata={
-                    "source_file": filename,
-                    "file_path": file_path,
-                    "content_type": "tabular_summary",
-                    "total_rows": len(df),
-                    "total_columns": len(df.columns)
-                }
-            ))
         
         return docs
         

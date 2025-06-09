@@ -2,7 +2,7 @@ from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from .config import settings
 from .few_shot_examples import FewShotExampleManager
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict
 from pydantic import PrivateAttr
 import tiktoken
 
@@ -147,7 +147,7 @@ def truncate_text_by_tokens(text: str, max_tokens: int, encoding, preserve_struc
         # Fallback: tronca per caratteri
         estimated_chars = max_tokens * 4
         return text[:estimated_chars] if len(text) > estimated_chars else text
-    
+
 
 def optimize_full_prompt_for_model(docs: List[Any], question: str, few_shot_section: str, 
                                    template: str, provider: str, model_name: str) -> tuple[str, str, dict]:
@@ -287,16 +287,17 @@ def get_llm(provider: str, model_name: str):
     
 def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_name: str = 'gpt-4o-mini', 
                                         use_few_shot: bool = True, max_examples: int = 3,
-                                        regenerateName: bool = False, generateDescription: bool = True):
+                                        regenerateName: bool = False, generateDescription: bool = True,
+                                        search_kwargs: Optional[Dict[str, Any]] = None):
     """
-    Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici e gestione token
+    Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici,
+    gestione token e supportando filtri dinamici tramite search_kwargs.
     """
+    final_search_kwargs = search_kwargs if search_kwargs is not None else {"k": 5, "score_threshold": 0.95}
+    
     retriever = store.as_retriever(
         search_type="similarity",
-        search_kwargs={
-            "k": 5,
-            "score_threshold": 0.95
-        }
+        search_kwargs=final_search_kwargs
     )
     
     llm = get_llm(provider, model_name)
@@ -331,7 +332,7 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
                 FewShotExampleManager() if _ufs else None
             )
 
-        # Proprietà per accedere ai tuoi PrivateAttr
+        # Proprietà per accedere ai PrivateAttr
         @property
         def use_few_shot(self) -> bool:
             return self._use_few_shot
@@ -367,7 +368,6 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
             print(f"Documenti selezionati {len(docs)} dal retriever:")
             for i, doc in enumerate(docs):
                 print(f"[{i+1}] {getattr(doc, 'page_content', str(doc))}")
-            # -------------------------------------------------
             
             # Aggiungi few-shot examples se abilitati
             few_shot_section = ""
@@ -397,7 +397,7 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
                 except Exception as e:
                     print(f"Errore nel recupero few-shot examples: {str(e)}")
                     few_shot_section = ""
-                    
+            
             template = get_prompt_template(regenerateName, generateDescription)
             
             optimized_context, optimized_few_shot, token_stats = optimize_full_prompt_for_model(
@@ -436,15 +436,18 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
         model_name=model_name
     )
 
-
 def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-4o-mini',
                     use_few_shot: bool = True, max_examples: int = 3,
-                    regenerateName: bool = False, generateDescription: bool = True):
+                    regenerateName: bool = False, generateDescription: bool = True,
+                    search_kwargs: Optional[Dict[str, Any]] = None):
     """
     Wrapper per backward compatibility con ottimizzazione tiktoken migliorata
     """
-    return build_rag_chain_with_improved_tokens(store, provider, model_name, use_few_shot, max_examples, regenerateName, generateDescription)
-
+    return build_rag_chain_with_improved_tokens(
+        store, provider, model_name, use_few_shot, max_examples, 
+        regenerateName, generateDescription, search_kwargs=search_kwargs
+    )
+    
 def supported_gemini_models():
     """
     Restituisce i modelli supportati da Gemini.
