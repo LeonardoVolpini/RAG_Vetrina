@@ -27,6 +27,7 @@ class AskRequest(BaseModel):
     query: str
     provider: Optional[str] = 'openai'  # 'openai', 'gemini', o 'llama'
     model_name: Optional[str] = None
+    k: int = 5                  # Numero di documenti da recuperare
     use_cache: bool = False
     use_few_shot: bool = True  # Nuovo parametro per controllare few-shot
     max_examples: int = 3      # Numero massimo di esempi da utilizzare
@@ -139,7 +140,7 @@ async def ask(request: AskRequest):
     store = vector_store.get_store()
     
     try:
-        result = ask_query(request.query, store, provider, model,
+        result = ask_query(request.query, store, provider, model, request.k,
                             use_few_shot, max_examples,
                             regenerateName, generateDescription)
         

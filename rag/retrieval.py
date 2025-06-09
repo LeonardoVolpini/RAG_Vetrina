@@ -293,7 +293,7 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
     Costruisce un RetrievalQA chain ottimizzato con few-shot examples dinamici,
     gestione token e supportando filtri dinamici tramite search_kwargs.
     """
-    final_search_kwargs = search_kwargs if search_kwargs is not None else {"k": 5, "score_threshold": 0.95}
+    final_search_kwargs = search_kwargs if search_kwargs is not None else {"k": 5}
     
     retriever = store.as_retriever(
         search_type="similarity",

@@ -100,7 +100,7 @@ def _extract_brand_filter(query: str, known_brands: List[str]) -> Optional[Dict[
             return filter_dict
     return None
 
-def ask_query(query: str, store, provider: str, model_name: str,
+def ask_query(query: str, store, provider: str, model_name: str, k: int,
               use_few_shot: bool, max_examples: int,
               regenerateName: bool, generateDescription: bool):
     """
@@ -144,7 +144,7 @@ def ask_query(query: str, store, provider: str, model_name: str,
         filter_dict = _extract_brand_filter(query, known_brands)
         
         # Costruisci i search_kwargs
-        search_kwargs = {"k": 5, "score_threshold": 0.95}
+        search_kwargs = {"k": k} if k is not None else {"k": 5}
         if filter_dict:
             search_kwargs["filter"] = filter_dict
 
