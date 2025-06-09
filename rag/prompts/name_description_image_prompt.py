@@ -23,7 +23,12 @@ def get_name_description_image_template() -> str:
 
         <reasoning>
         1.  **Analisi Iniziale della User Question:**
-            a. Estrai una potenziale `sigla_query` dalla <user_question> (es. "GS9987X", "PN3500X", codici alfanumerici). Se non è chiaramente una sigla, considerala vuota.
+            a. Estrai una potenziale `sigla_query` dalla <user_question>, **solo se è un codice alfanumerico identificativo del prodotto (es. "GS9987X", "PN3500X")**.
+                - **NON considerare sigla_query**:
+                    - Codici tecnici o unità di misura come: "W", "V", "Ah", "Nm", "g/min", "l/min", "bar", "rpm", "mm", "kg"
+                    - Valori numerici o dimensioni, come: "18V", "4Ah", "190x120", "400W"
+                    - Combinazioni alfanumeriche riconoscibili come specifiche tecniche
+                - Se non è chiaramente una sigla identificativa di prodotto, considera `sigla_query` vuota.
             b. Estrai il `brand_query` dalla <user_question> (es. "Yamato", "AEG", "Bosch"). Se non presente, consideralo vuoto.
             c. Estrai tutti i `termini_ricerca` (non sono sigle) dalla `<user_question>` che rappresentano:
                 - Nomi di prodotti/strumenti (es. "trapano", "avvitatore", "smerigliatrice")
