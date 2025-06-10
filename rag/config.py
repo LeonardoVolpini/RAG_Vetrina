@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     LLAMA_API_BASE: str = "https://api.cloud.llamaindex.ai"  # LlamaCloud URL
     
     # Vector store settings
-    VECTOR_STORE_PATH: str = "./vector_store.faiss"
+    VECTOR_STORE_PATH: str = "./vector_store"
 
     class Config:
         env_file = ".env"

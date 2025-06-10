@@ -5,7 +5,7 @@ from .retrieval import build_rag_chain
 from .config import settings
 import os
 from typing import Dict, Any, Optional, List
-from langchain_community.vectorstores import Chroma 
+from langchain_chroma import Chroma 
 
 def get_file_type(file_path: str) -> str:
     """Determina il tipo di file in base all'estensione"""
@@ -21,7 +21,7 @@ def get_file_type(file_path: str) -> str:
 def ingest_documents(file_paths: list[str], rebuild_index: bool = False, provider: str = 'openai',
                      csv_options: Optional[Dict[str, Any]] = None) -> Any:
     """
-    Funzione unificata per ingest: carica PDF e CSV, crea/carica indice FAISS e restituisce store.
+    Funzione unificata per ingest: carica PDF e CSV, crea/carica indice e restituisce store.
     Supporta sia la ricostruzione completa che l'aggiunta incrementale di documenti.
     
     Args:
@@ -108,7 +108,7 @@ def ask_query(query: str, store, provider: str, model_name: str, k: int,
     
     Args:
         query: Query utente
-        store: Vector store FAISS
+        store: Vector store
         provider: Provider LLM ('openai', 'gemini', o 'llama')
         model_name: Nome del modello specifico
         use_few_shot: Se utilizzare few-shot examples

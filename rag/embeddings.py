@@ -1,6 +1,5 @@
 from .config import settings
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
 from langchain_core.embeddings import Embeddings
 import google.generativeai as genai
 import os
@@ -120,30 +119,3 @@ def get_embeddings(provider='openai'):
         return LlamaEmbeddings()
     else:
         raise ValueError(f"Provider embedding non supportato: {provider}")
-
-# Funzione attualmente inutilizzata
-def get_vector_store(docs: list, rebuild: bool = False, provider='openai') -> FAISS:
-    """
-    Crea o carica indice FAISS per embeddings dei documenti.
-    Supporta sia ricostruzione completa che aggiunta incrementale.
-    """
-    embeddings = get_embeddings(provider)
-    
-    if rebuild or not os.path.exists(settings.VECTOR_STORE_PATH):
-        # Crea un nuovo indice
-        store = FAISS.from_documents(docs, embeddings)
-        store.save_local(settings.VECTOR_STORE_PATH)
-    else:
-        # Carica l'indice esistente con allow_dangerous_deserialization=True
-        store = FAISS.load_local(
-            settings.VECTOR_STORE_PATH, 
-            embeddings,
-            allow_dangerous_deserialization=True  # Aggiunto questo parametro
-        )
-        
-        # Aggiungi i nuovi documenti se ce ne sono
-        if docs:
-            store.add_documents(docs)
-            store.save_local(settings.VECTOR_STORE_PATH)
-            
-    return store
