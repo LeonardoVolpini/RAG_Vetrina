@@ -6,55 +6,60 @@ from .config import settings
 class FewShotExampleManager:
     """Gestisce gli esempi few-shot per il sistema RAG con supporto per reasoning step-by-step"""
     
-    def __init__(self, examples_file: str = None):
-        self.examples_file = examples_file or os.path.join(os.path.dirname(settings.VECTOR_STORE_PATH), "few_shot_examples.json")
-        self.examples = self._load_examples()
+    def __init__(self, examples_base_dir: str = None):
+        self.examples_base_dir = examples_base_dir or os.path.join(os.path.dirname(settings.VECTOR_STORE_PATH), "few_shot_examples")
+        self._ensure_examples_directory()
     
-    def _load_examples(self) -> List[Dict[str, str]]:
-        """Carica gli esempi da file JSON"""
+    def _ensure_examples_directory(self):
+        """Crea la directory degli esempi se non esiste"""
+        os.makedirs(self.examples_base_dir, exist_ok=True)
+    
+    def _get_examples_file_path(self, name: bool, description: bool) -> str:
+        """Determina il percorso del file JSON basato sui parametri name e description"""
+        if name and description:
+            filename = "name_description_image.json"
+        elif not name and description:
+            filename = "description_image.json"
+        elif name and not description:
+            filename = "name_image.json"
+        else:
+            filename = "image.json"
+            
+        print(f"Utilizzo file esempi: {filename} (name={name}, description={description})")
+        
+        return os.path.join(self.examples_base_dir, filename)
+    
+    def _load_examples(self, name: bool, description: bool) -> List[Dict[str, str]]:
+        """Carica gli esempi dal file JSON appropriato"""
+        examples_file = self._get_examples_file_path(name, description)
+        
         try:
-            if os.path.exists(self.examples_file):
-                with open(self.examples_file, 'r', encoding='utf-8') as f:
+            if os.path.exists(examples_file):
+                with open(examples_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             else:
-                # Crea esempi di default
-                default_examples = self._get_default_examples()
-                self._save_examples(default_examples)
-                return default_examples
+                # Restituisce lista vuota se il file non esiste
+                return []
         except Exception as e:
-            print(f"Errore nel caricamento degli esempi: {str(e)}")
-            return self._get_default_examples()
+            print(f"Errore nel caricamento degli esempi da {examples_file}: {str(e)}")
+            return []
     
-    def _save_examples(self, examples: List[Dict[str, str]]):
-        """Salva gli esempi su file JSON"""
+    def _save_examples(self, examples: List[Dict[str, str]], name: bool, description: bool):
+        """Salva gli esempi nel file JSON appropriato"""
+        examples_file = self._get_examples_file_path(name, description)
+        
         try:
-            os.makedirs(os.path.dirname(self.examples_file), exist_ok=True)
-            with open(self.examples_file, 'w', encoding='utf-8') as f:
+            with open(examples_file, 'w', encoding='utf-8') as f:
                 json.dump(examples, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"Errore nel salvare gli esempi: {str(e)}")
+            print(f"Errore nel salvare gli esempi in {examples_file}: {str(e)}")
     
-    def _get_default_examples(self) -> List[Dict[str, str]]:
-        """Esempi di default con reasoning step-by-step"""
-        return [
-            {
-                "context_snapshot": """[ 
-                                        { "name": "CARTA ABRASIVA PER MOLLA - FDS 140. Abrasive Paper- Clamp Type for FDS 140", "brand": "AEG", "description": "Carta abrasiva preforata per legno, vernice, smalto e spatolato; Tipo di grana: ossido di alluminio legato con resina artificiale su carta speciale antistrappo; Ideale per legno e lavori di carrozzeria", "image_url": "/images/aeg_products/CARTA_ABRASIVA_PER_MOLLA_-_FDS_140_Abrasive_Paper-_Clamp_Type_for_FDS_140.webp"},
-                                        { "name": "Martello demolitore 7 kg SDS-MAX MH 7E", "brand": "AEG", "description": "Potente motore da 1500 watt; Energia di impatto 10,5 J, per pesanti applicazioni di scalpellatura; La modalità di percussione morbida permette di ridurre l'energia battente per migliori risultati in materiali teneri; Il sistema di antivibrazione AVS permette di ridurre significativamente le vibrazioni, per un maggior comfort di utilizzo; Avviamento morbido per un'ottimale controllo della foratura; 'Luce service' indica la necessità di manutenzione; Indicatore luminoso di presenza della tensione", "image_url": "/images/aeg_products/Martello_demolitore_7_kg_SDS-MAX_MH_7E.webp" }
-                                        ]""",
-                "question": "Genera per favore tre informazioni: 1) Una descrizione commerciale tecnica per Smerigliatrice angolare Brushless 18V BEWS 18-125BL. 2) Il brand associato a questo prodotto 3) Il percorso (path) dell’immagine associata a questo prodotto. Restituisci l’output in questo formato: {{ \"description\": \"<testo descrizione>\",, \"brand\": \"<brand>\", \"image_url\": \"<percorso/immagine.webp>\"}}",
-                "reasoning": """
-                                1. Ho esaminato il contesto fornito e ho trovato due prodotti: una carta abrasiva e un martello demolitore.
-                                2. Nessuno di questi prodotti è una smerigliatrice angolare, quindi non posso generare una descrizione per un prodotto che non è presente nel contesto.
-                                3. Non posso inventare specifiche per un prodotto inesistente, quindi la risposta per la decrizione è "Non lo so."
-                                4. Di conseguenza lascio brand e image url vuoti.
-                            """,
-                "answer": "{{ \"description\": \"Non lo so.\", \"brand\": \"\", \"image_url\": \"\"}}"
-            }
-        ]
-    
-    def add_example(self, question: str, answer: str, context_snapshot: str, reasoning: str):
-        """Aggiunge un nuovo esempio con reasoning"""        
+    def add_example(self, question: str, answer: str, context_snapshot: str, reasoning: str, name: bool, description: bool):
+        """Aggiunge un nuovo esempio nel file appropriato"""
+        
+        # Carica gli esempi esistenti
+        existing_examples = self._load_examples(name, description)
+        
         new_example = {
             "context_snapshot": context_snapshot.strip(),
             "question": question.strip(),
@@ -62,25 +67,31 @@ class FewShotExampleManager:
             "reasoning": reasoning.strip()
         }
         
-        self.examples.append(new_example)
-        self._save_examples(self.examples)
+        existing_examples.append(new_example)
+        self._save_examples(existing_examples, name, description)
 
-        print(f"Aggiunto nuovo esempio. Totale esempi: {len(self.examples)}")
+        filename = self._get_examples_file_path(name, description).split('/')[-1]
+        print(f"Aggiunto nuovo esempio in {filename}. Totale esempi: {len(existing_examples)}")
     
-    def remove_example(self, index: int):
-        """Rimuove un esempio per indice"""
-        if 0 <= index < len(self.examples):
-            removed = self.examples.pop(index)
-            self._save_examples(self.examples)
-            print(f"Rimosso esempio: {removed['question']}")
+    def remove_example(self, index: int, name: bool, description: bool):
+        """Rimuove un esempio per indice dal file appropriato"""
+        examples = self._load_examples(name, description)
+        
+        if 0 <= index < len(examples):
+            removed = examples.pop(index)
+            self._save_examples(examples, name, description)
+            filename = self._get_examples_file_path(name, description).split('/')[-1]
+            print(f"Rimosso esempio da {filename}: {removed['question']}")
             return True
         return False
     
-    def get_examples(self, max_examples: int = None) -> List[Dict[str, str]]:
-        """Restituisce gli esempi (limitati se specificato)"""
+    def get_examples(self, name: bool, description: bool, max_examples: int = None) -> List[Dict[str, str]]:
+        """Restituisce gli esempi dal file appropriato (limitati se specificato)"""
+        examples = self._load_examples(name, description)
+        
         if max_examples:
-            return self.examples[:max_examples]
-        return self.examples
+            return examples[:max_examples]
+        return examples
     
     def _format_context_for_prompt(self, context_snapshot: str) -> str:
         """
@@ -107,22 +118,23 @@ class FewShotExampleManager:
             result = context_snapshot.strip()
             return result.replace("{", "{{").replace("}", "}}")
     
-    def format_examples_for_prompt(self, max_examples: int = 3, store=None) -> str:
+    def format_examples_for_prompt(self, name: bool, description: bool, max_examples: int = 3) -> str:
         """
-        Formatta gli esempi per il prompt
+        Formatta gli esempi per il prompt dal file appropriato
         
         Args:
+            name: Se includere esempi per richieste di name
+            description: Se includere esempi per richieste di description  
             max_examples: Numero massimo di esempi da includere
-            store: Vector store FAISS per recuperare il contesto (opzionale)
         """
-        examples = self.get_examples(max_examples)
+        examples = self.get_examples(name, description, max_examples)
         if not examples:
             return ""
             
         formatted_examples = []
         
         for i, example in enumerate(examples, 1):
-            # Salta esempi vuoti o di default
+            # Salta esempi vuoti
             if not example.get('question') or not example.get('answer'):
                 continue
                 
@@ -139,20 +151,24 @@ Risposta: {example['answer']}"""
         
         return "\n\n".join(formatted_examples)
     
-    def get_relevant_examples(self, query: str, store, max_examples: int = 3) -> str:
+    def get_relevant_examples(self, query: str, name: bool, description: bool, store, max_examples: int = 3) -> str:
         """
         Recupera gli esempi più rilevanti per una query specifica usando similarity search
         
         Args:
             query: Query dell'utente
+            name: Se la query richiede informazioni sui nomi
+            description: Se la query richiede informazioni sulle descrizioni
             store: Vector store per il similarity search
             max_examples: Numero massimo di esempi da restituire
         """
-        if not self.examples:
+        examples = self._load_examples(name, description)
+        
+        if not examples:
             return ""
         
         # Filtra esempi vuoti
-        valid_examples = [ex for ex in self.examples if ex.get('question') and ex.get('answer')]
+        valid_examples = [ex for ex in examples if ex.get('question') and ex.get('answer')]
         if not valid_examples:
             return ""
         
@@ -179,8 +195,6 @@ Risposta: {example['answer']}"""
             examples_store = FAISS.from_documents(example_docs, embeddings)
             
             # Trova gli esempi più simili alla query
-            #similar_examples = examples_store.similarity_search(query, k=min(max_examples, len(example_docs)))
-            
             similar_examples = examples_store.max_marginal_relevance_search(
                 query, 
                 k=min(max_examples, len(example_docs)), 
@@ -208,4 +222,21 @@ Risposta: {example['answer']}"""
         except Exception as e:
             print(f"Errore nel recupero degli esempi rilevanti: {str(e)}")
             # Fallback agli esempi standard
-            return self.format_examples_for_prompt(max_examples, store)
+            return self.format_examples_for_prompt(name, description, max_examples)
+    
+    def list_all_example_files(self) -> Dict[str, int]:
+        """Restituisce un dizionario con tutti i file di esempi e il numero di esempi contenuti"""
+        file_counts = {}
+        
+        combinations = [
+            (True, True, "name_description_image.json"),
+            (False, True, "description_image.json"), 
+            (True, False, "name_image.json"),
+            (False, False, "image.json")
+        ]
+        
+        for name, desc, filename in combinations:
+            examples = self._load_examples(name, desc)
+            file_counts[filename] = len(examples)
+        
+        return file_counts

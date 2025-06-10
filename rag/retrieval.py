@@ -309,6 +309,8 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
         _example_manager: Any   = PrivateAttr()
         _provider: str          = PrivateAttr()
         _model_name: str        = PrivateAttr()
+        _regenerateName: bool   = PrivateAttr()
+        _generateDescription: bool   = PrivateAttr()
 
 
         def __init__(self, *args: Any, **kwargs: Any):
@@ -317,6 +319,8 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
             _mex = kwargs.pop("max_examples", 3)
             _prov = kwargs.pop("provider", "openai")
             _model = kwargs.pop("model_name", "gpt-4o-mini")
+            _name = kwargs.pop("regenerateName", False)
+            _desc = kwargs.pop("generateDescription", True)
 
             # Costruttore base: tutti gli altri argomenti
             super().__init__(*args, **kwargs)
@@ -326,6 +330,8 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
             object.__setattr__(self, "_max_examples", _mex)
             object.__setattr__(self, "_provider", _prov)
             object.__setattr__(self, "_model_name", _model)
+            object.__setattr__(self, "_regenerateName", _name)
+            object.__setattr__(self, "_generateDescription", _desc)
             object.__setattr__(
                 self,
                 "_example_manager",
@@ -353,6 +359,14 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
         def model_name(self) -> str:
             return self._model_name
         
+        @property
+        def regenerateName(self) -> str:
+            return self._regenerateName
+        
+        @property
+        def generateDescription(self) -> str:
+            return self._generateDescription
+        
         def _get_docs(self, question: str, *, run_manager=None):
             """Override per includere few-shot examples nella chiamata e ottimizzazione token"""
             docs = super()._get_docs(question, run_manager=run_manager)
@@ -374,7 +388,9 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
             if self.use_few_shot and self.example_manager:
                 try:
                     few_shot_examples = self.example_manager.get_relevant_examples(
-                        question, 
+                        question,
+                        self.regenerateName,
+                        self.generateDescription,
                         self.retriever.vectorstore,
                         self.max_examples
                     )
@@ -433,7 +449,9 @@ def build_rag_chain_with_improved_tokens(store, provider: str = 'openai', model_
         use_few_shot=use_few_shot,
         max_examples=max_examples,
         provider=provider,
-        model_name=model_name
+        model_name=model_name,
+        regenerateName=regenerateName,
+        generateDescription=generateDescription
     )
 
 def build_rag_chain(store, provider: str = 'openai', model_name: str = 'gpt-4o-mini',

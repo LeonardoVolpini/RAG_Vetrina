@@ -39,19 +39,16 @@ class FewShotExample(BaseModel):
     answer: str
     context_snapshot: Any
     reasoning: str
+    regenerateName: bool = False
+    generateDescription: bool = True
 
 class AddExampleRequest(BaseModel):
     question: str
     answer: str
     context_snapshot: Any
     reasoning: str
-
-class UpdateExampleRequest(BaseModel):
-    index: int
-    question: Optional[str] = None
-    answer: Optional[str] = None
-    context_snapshot: Optional[Any] = None
-    reasoning: Optional[str] = None
+    regenerateName: bool = False
+    generateDescription: bool = True
 
 @app.on_event("startup")
 async def startup_event():
@@ -179,14 +176,6 @@ async def get_info():
         info["document_count"] = 0
         info["status"] = "not_ready" if vector_store.is_initialized() else "needs_ingest"
     
-    # Aggiungi informazioni sui few-shot examples
-    try:
-        example_manager = FewShotExampleManager()
-        info["few_shot_examples_count"] = len(example_manager.get_examples())
-    except Exception as e:
-        info["few_shot_examples_count"] = 0
-        info["few_shot_examples_error"] = str(e)
-    
     # Carica metadata se disponibili
     try:
         from rag.config import settings
@@ -221,13 +210,16 @@ async def get_models(provider: str):
 
 @app.get('/few-shot/examples/')
 async def get_few_shot_examples():
-    """Ottieni tutti gli esempi few-shot"""
+    """Ottieni il numero degli esempi few-shot"""
     try:
         example_manager = FewShotExampleManager()
-        examples = example_manager.get_examples()
+        tot = 0
+        tot += len(example_manager.get_examples(True, True))
+        tot += len(example_manager.get_examples(True, False))
+        tot += len(example_manager.get_examples(False, True))
+        tot += len(example_manager.get_examples(False, False))
         return {
-            "total_examples": len(examples),
-            "examples": examples
+            "total_examples": tot
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore nel recupero degli esempi: {str(e)}")
@@ -247,48 +239,17 @@ async def add_few_shot_example(request: AddExampleRequest):
             question=request.question,
             answer=request.answer,
             context_snapshot=context_snapshot,
-            reasoning=request.reasoning
+            reasoning=request.reasoning,
+            name=request.regenerateName,
+            description=request.generateDescription
         )
-        total_examples = len(example_manager.get_examples())
+        total_examples = len(example_manager.get_examples(request.regenerateName, request.generateDescription))
         return {
             "message": "Esempio aggiunto con successo",
             "total_examples": total_examples
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore nell'aggiunta dell'esempio: {str(e)}")
-
-@app.put('/few-shot/examples/{example_index}')
-async def update_few_shot_example(example_index: int, request: UpdateExampleRequest):
-    """Aggiorna un esempio few-shot esistente"""
-    try:
-        example_manager = FewShotExampleManager()
-        examples = example_manager.get_examples()
-        
-        if example_index < 0 or example_index >= len(examples):
-            raise HTTPException(status_code=404, detail=f"Esempio con indice {example_index} non trovato")
-        
-        # Aggiorna solo i campi specificati
-        if request.question is not None:
-            examples[example_index]["question"] = request.question
-        if request.answer is not None:
-            examples[example_index]["answer"] = request.answer
-        if request.context_snapshot is not None:
-            examples[example_index]['context_snapshot'] = request.context_snapshot
-        if request.reasoning is not None:
-            examples[example_index]["reasoning"] = request.reasoning
-        
-        # Salva gli esempi aggiornati
-        example_manager.examples = examples
-        example_manager._save_examples(examples)
-        
-        return {
-            "message": "Esempio aggiornato con successo",
-            "updated_example": examples[example_index]
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore nell'aggiornamento dell'esempio: {str(e)}")
 
 @app.delete('/few-shot/examples/{example_index}')
 async def delete_few_shot_example(example_index: int):
@@ -300,38 +261,17 @@ async def delete_few_shot_example(example_index: int):
         if not success:
             raise HTTPException(status_code=404, detail=f"Esempio con indice {example_index} non trovato")
         
-        total_examples = len(example_manager.get_examples())
         return {
-            "message": "Esempio eliminato con successo",
-            "total_examples": total_examples
+            "message": "Esempio eliminato con successo"
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore nell'eliminazione dell'esempio: {str(e)}")
 
-@app.get('/few-shot/examples/{example_index}')
-async def get_few_shot_example(example_index: int):
-    """Ottieni un singolo esempio few-shot per indice"""
-    try:
-        example_manager = FewShotExampleManager()
-        examples = example_manager.get_examples()
-        
-        if example_index < 0 or example_index >= len(examples):
-            raise HTTPException(status_code=404, detail=f"Esempio con indice {example_index} non trovato")
-        
-        return {
-            "index": example_index,
-            "example": examples[example_index]
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore nel recupero dell'esempio: {str(e)}")
-
 @app.post('/few-shot/examples/bulk')
 async def add_bulk_few_shot_examples(examples: List[FewShotExample]):
-    """Aggiungi più esempi few-shot in una volta (solo question-answer)"""
+    """Aggiungi più esempi few-shot in una volta"""
     try:
         example_manager = FewShotExampleManager()
         added_count = 0
@@ -341,21 +281,22 @@ async def add_bulk_few_shot_examples(examples: List[FewShotExample]):
                 question=example.question,
                 answer=example.answer,
                 context_snapshot=example.context_snapshot,
-                reasoning=example.reasoning
+                reasoning=example.reasoning,
+                name=example.regenerateName,
+                description=example.generateDescription
             )
             added_count += 1
         
-        total_examples = len(example_manager.get_examples())
         return {
             "message": f"{added_count} esempi aggiunti con successo",
-            "added_examples": added_count,
-            "total_examples": total_examples
+            "added_examples": added_count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore nell'aggiunta degli esempi: {str(e)}")
 
 @app.get('/few-shot/preview/')
-async def preview_few_shot_prompt(max_examples: int = 3, query: str = "esempio di query"):
+async def preview_few_shot_prompt(max_examples: int = 3, query: str = "esempio di query",
+                                  regenerateName: bool = False, generateDescription: bool = True):
     """Anteprima di come appaiono gli esempi nel prompt per una query specifica"""
     try:
         vector_store = VectorStoreSingleton.get_instance()
@@ -367,6 +308,8 @@ async def preview_few_shot_prompt(max_examples: int = 3, query: str = "esempio d
         example_manager = FewShotExampleManager()
         formatted_examples = example_manager.get_relevant_examples(
             query=query,
+            name=regenerateName,
+            description=generateDescription,
             store=store,
             max_examples=max_examples
         )
@@ -374,8 +317,7 @@ async def preview_few_shot_prompt(max_examples: int = 3, query: str = "esempio d
         return {
             "query": query,
             "max_examples": max_examples,
-            "formatted_prompt": formatted_examples,
-            "total_available_examples": len(example_manager.get_examples())
+            "formatted_prompt": formatted_examples
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore nella generazione dell'anteprima: {str(e)}")
