@@ -150,7 +150,7 @@ def ask_query(query: str, store, provider: str, model_name: str, k: int,
 
         rag_chain = build_rag_chain_wrapper(
             store, provider, model_name, use_few_shot, max_examples, 
-            regenerateName, generateDescription, is_bulk_upload=True,
+            is_bulk_upload=True, regenerateName=regenerateName, generateDescription=generateDescription,
             search_kwargs=search_kwargs
         )
         
