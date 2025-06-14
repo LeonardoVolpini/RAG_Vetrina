@@ -24,7 +24,7 @@ def get_image_template() -> str:
         <reasoning>
         1.  **Analisi Iniziale della User Question:**
             a. Estrai una potenziale `sigla_query` dalla <user_question> (es. "GS9987X", "PN3500X", codici alfanumerici). Se non è chiaramente una sigla, considerala vuota.
-            b. Estrai il `brand_query` dalla <user_question> (es. "Yamato", "AEG", "Bosch"). Se non presente, consideralo vuoto.
+            b. Estrai il `brand_query` dalla <user_question> (es. "Yamato", "AEG", "Bosch"). `brand_query` può anche essere scritto come abbreviazione (rothoblaas-->roth., roth, rotho, rothob. etc..). Se non presente, consideralo vuoto.
             c. Estrai tutti i `termini_ricerca` (non sono sigle) dalla `<user_question>` che rappresentano:
                 - Nomi di prodotti/strumenti (es. "trapano", "avvitatore", "smerigliatrice")
                 - Categorie merceologiche (es. "fissativo", "silicone", "colla")

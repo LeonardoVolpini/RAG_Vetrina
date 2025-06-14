@@ -29,7 +29,7 @@ def get_name_description_image_template() -> str:
                     - Valori numerici o dimensioni, come: "18V", "4Ah", "190x120", "400W"
                     - Combinazioni alfanumeriche riconoscibili come specifiche tecniche
                 - Se non è chiaramente una sigla identificativa di prodotto, considera `sigla_query` vuota.
-            b. Estrai il `brand_query` dalla <user_question> (es. "Yamato", "AEG", "Bosch"). Se non presente, consideralo vuoto.
+            b. Estrai il `brand_query` dalla <user_question> (es. "Yamato", "AEG", "Bosch"). `brand_query` può anche essere scritto come abbreviazione (rothoblaas-->roth., roth, rotho, rothob. etc..). Se non presente, consideralo vuoto.
             c. Estrai tutti i `termini_ricerca` (non sono sigle) dalla `<user_question>` che rappresentano:
                 - Nomi di prodotti/strumenti (es. "trapano", "avvitatore", "smerigliatrice")
                 - Categorie merceologiche (es. "fissativo", "silicone", "colla")
