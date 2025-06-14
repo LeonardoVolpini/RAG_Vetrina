@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from rag.generate import ingest_documents, ask_query
+from rag.generate import ingest_documents, ask_query, ask_query_single_product
 from rag.vector_store_singleton import VectorStoreSingleton
 from rag.cache import ResponseCache
 from rag.few_shot_examples import FewShotExampleManager
@@ -33,22 +33,23 @@ class AskRequest(BaseModel):
     max_examples: int = 3      # Numero massimo di esempi da utilizzare
     regenerateName: bool = False
     generateDescription: bool = True
-
-class FewShotExample(BaseModel):
-    question: str
-    answer: str
-    context_snapshot: Any
-    reasoning: str
-    regenerateName: bool = False
-    generateDescription: bool = True
+    
+class AskRequestSingleProduct(BaseModel):
+    query: str
+    provider: Optional[str] = 'openai'  # 'openai', 'gemini', o 'llama'
+    model_name: Optional[str] = None
+    k: int = 5                  # Numero di documenti da recuperare
+    use_cache: bool = False
+    use_few_shot: bool = True  # Nuovo parametro per controllare few-shot
+    max_examples: int = 3      # Numero massimo di esempi da utilizzare
 
 class AddExampleRequest(BaseModel):
     question: str
     answer: str
     context_snapshot: Any
     reasoning: str
-    regenerateName: bool = False
-    generateDescription: bool = True
+    regenerateName: bool = None
+    generateDescription: bool = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -115,7 +116,7 @@ async def ask(request: AskRequest):
     if provider == 'openai':
         model = request.model_name or 'gpt-4o-mini'
     elif provider == 'gemini':
-        model = request.model_name or 'gemini-models/gemini-1.5-pro-latest'
+        model = request.model_name or 'models/gemini-2.5-flash-preview-05-20'
     elif provider == 'llama':
         model = request.model_name or 'llama-model'
 
@@ -146,6 +147,59 @@ async def ask(request: AskRequest):
         error_trace = traceback.format_exc()
         print(f"Errore durante la query: {error_trace}")
         result = {"error": str(e), "answer": "Si è verificato un errore durante la generazione della risposta."}
+    
+    # Salva in cache
+    if request.use_cache and "error" not in result:
+        response_cache.set(cache_key, provider, model, result)
+    
+    return result
+
+@app.post('/ask/single_product/')
+async def ask(request: AskRequestSingleProduct):
+    """Endpoint per eseguire una query RAG per generzione della sola immagine"""
+    # Validazione del provider
+    if request.provider not in ['openai', 'gemini', 'llama']:
+        raise HTTPException(status_code=400, detail=f"Provider non supportato: {request.provider}")
+    
+    vector_store = VectorStoreSingleton.get_instance()
+    
+    if not vector_store.is_initialized():
+        return {"error": "Indice non inizializzato. Chiamare prima /ingest/."}
+    
+    provider = request.provider
+    
+    # Determinazione del modello di default in base al provider
+    if provider == 'openai':
+        model = request.model_name or 'gpt-4o-mini'
+    elif provider == 'gemini':
+        model = request.model_name or 'models/gemini-2.5-flash-preview-05-20'
+    elif provider == 'llama':
+        model = request.model_name or 'llama-model'
+
+    use_few_shot = request.use_few_shot
+    max_examples = request.max_examples or 3
+
+    # Crea una chiave cache
+    cache_key = f"{request.query}_{provider}_{model}_{use_few_shot}"
+    
+    # Verifica se la risposta è in cache
+    if request.use_cache:
+        cached_result = response_cache.get(cache_key, provider, model)
+        if cached_result:
+            return {**cached_result, "from_cache": True}
+    
+    # Ottieni lo store e esegui la query
+    store = vector_store.get_store()
+    
+    try:
+        result = ask_query_single_product(request.query, store, provider, model, request.k,
+                            use_few_shot, max_examples)
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Errore durante la query: {error_trace}")
+        result = {"error": str(e), "answer": "Si è verificato un errore durante la generazione dell'immagine."}
     
     # Salva in cache
     if request.use_cache and "error" not in result:
@@ -208,22 +262,6 @@ async def get_models(provider: str):
 
 # --- ENDPOINT PER FEW-SHOT EXAMPLES ---
 
-@app.get('/few-shot/examples/')
-async def get_few_shot_examples():
-    """Ottieni il numero degli esempi few-shot"""
-    try:
-        example_manager = FewShotExampleManager()
-        tot = 0
-        tot += len(example_manager.get_examples(True, True))
-        tot += len(example_manager.get_examples(True, False))
-        tot += len(example_manager.get_examples(False, True))
-        tot += len(example_manager.get_examples(False, False))
-        return {
-            "total_examples": tot
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore nel recupero degli esempi: {str(e)}")
-
 @app.post('/few-shot/examples/')
 async def add_few_shot_example(request: AddExampleRequest):
     """Aggiungi un nuovo esempio few-shot (solo question-answer)"""
@@ -250,77 +288,6 @@ async def add_few_shot_example(request: AddExampleRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore nell'aggiunta dell'esempio: {str(e)}")
-
-@app.delete('/few-shot/examples/{example_index}')
-async def delete_few_shot_example(example_index: int):
-    """Elimina un esempio few-shot"""
-    try:
-        example_manager = FewShotExampleManager()
-        success = example_manager.remove_example(example_index)
-        
-        if not success:
-            raise HTTPException(status_code=404, detail=f"Esempio con indice {example_index} non trovato")
-        
-        return {
-            "message": "Esempio eliminato con successo"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore nell'eliminazione dell'esempio: {str(e)}")
-
-@app.post('/few-shot/examples/bulk')
-async def add_bulk_few_shot_examples(examples: List[FewShotExample]):
-    """Aggiungi più esempi few-shot in una volta"""
-    try:
-        example_manager = FewShotExampleManager()
-        added_count = 0
-        
-        for example in examples:
-            example_manager.add_example(
-                question=example.question,
-                answer=example.answer,
-                context_snapshot=example.context_snapshot,
-                reasoning=example.reasoning,
-                name=example.regenerateName,
-                description=example.generateDescription
-            )
-            added_count += 1
-        
-        return {
-            "message": f"{added_count} esempi aggiunti con successo",
-            "added_examples": added_count
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore nell'aggiunta degli esempi: {str(e)}")
-
-@app.get('/few-shot/preview/')
-async def preview_few_shot_prompt(max_examples: int = 3, query: str = "esempio di query",
-                                  regenerateName: bool = False, generateDescription: bool = True):
-    """Anteprima di come appaiono gli esempi nel prompt per una query specifica"""
-    try:
-        vector_store = VectorStoreSingleton.get_instance()
-        store = vector_store.get_store()
-        
-        if not store:
-            return {"error": "Vector store non inizializzato"}
-        
-        example_manager = FewShotExampleManager()
-        formatted_examples = example_manager.get_relevant_examples(
-            query=query,
-            name=regenerateName,
-            description=generateDescription,
-            store=store,
-            max_examples=max_examples
-        )
-        
-        return {
-            "query": query,
-            "max_examples": max_examples,
-            "formatted_prompt": formatted_examples
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore nella generazione dell'anteprima: {str(e)}")
 
 
 if __name__ == "__main__":

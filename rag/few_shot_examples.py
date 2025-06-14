@@ -16,7 +16,9 @@ class FewShotExampleManager:
     
     def _get_examples_file_path(self, name: bool, description: bool) -> str:
         """Determina il percorso del file JSON basato sui parametri name e description"""
-        if name and description:
+        if name is None and description is None:
+            filename = "single_product.json"
+        elif name and description:
             filename = "name_description_image.json"
         elif not name and description:
             filename = "description_image.json"
@@ -25,7 +27,7 @@ class FewShotExampleManager:
         else:
             filename = "image.json"
             
-        print(f"Utilizzo file esempi: {filename} (name={name}, description={description})")
+        print(f"Utilizzo file esempi: {filename})")
         
         return os.path.join(self.examples_base_dir, filename)
     
@@ -151,7 +153,7 @@ Risposta: {example['answer']}"""
         
         return "\n\n".join(formatted_examples)
     
-    def get_relevant_examples(self, query: str, name: bool, description: bool, store, max_examples: int = 3) -> str:
+    def get_relevant_examples(self, query: str, name: bool, description: bool, max_examples: int = 3) -> str:
         """
         Recupera gli esempi più rilevanti per una query specifica usando similarity search
         
@@ -232,7 +234,8 @@ Risposta: {example['answer']}"""
             (True, True, "name_description_image.json"),
             (False, True, "description_image.json"), 
             (True, False, "name_image.json"),
-            (False, False, "image.json")
+            (False, False, "image.json"),
+            (None, None, "single_product.json")
         ]
         
         for name, desc, filename in combinations:

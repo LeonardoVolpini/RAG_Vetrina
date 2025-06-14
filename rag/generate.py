@@ -1,7 +1,7 @@
-from .loader_pdf import load_pdfs
-from .loader_csv import load_csv
+from .loaders.loader_pdf import load_pdfs
+from .loaders.loader_csv import load_csv
 from .embeddings import get_embeddings
-from .retrieval import build_rag_chain
+from .retrieval import build_rag_chain_wrapper
 from .config import settings
 import os
 from typing import Dict, Any, Optional, List
@@ -148,9 +148,9 @@ def ask_query(query: str, store, provider: str, model_name: str, k: int,
         if filter_dict:
             search_kwargs["filter"] = filter_dict
 
-        rag_chain = build_rag_chain(
+        rag_chain = build_rag_chain_wrapper(
             store, provider, model_name, use_few_shot, max_examples, 
-            regenerateName, generateDescription,
+            regenerateName, generateDescription, is_bulk_upload=True,
             search_kwargs=search_kwargs
         )
         
@@ -173,3 +173,74 @@ def ask_query(query: str, store, provider: str, model_name: str, k: int,
         error_trace = traceback.format_exc()
         print(f"Errore durante la query: {error_trace}")
         return {"error": str(e), "answer": "Si è verificato un errore durante la generazione della risposta."}
+    
+def ask_query_single_product(query: str, store, provider: str, model_name: str, k: int,
+              use_few_shot: bool, max_examples: int):
+    """
+    Esegue query RAG per la rigenerazione dell'immagine e della descrizione sul prodotto singolo.
+    
+    Args:
+        query: Query utente
+        store: Vector store
+        provider: Provider LLM ('openai', 'gemini', o 'llama')
+        model_name: Nome del modello specifico
+        use_few_shot: Se utilizzare few-shot examples
+        max_examples: Numero massimo di esempi
+    """
+    # Validazione provider
+    if provider not in ['openai', 'gemini', 'llama']:
+        raise ValueError(f"Provider non supportato: {provider}")
+        
+    try:
+        # Marche conosciute
+        known_brands = [
+                    "abk", "aco", "aeg", "albatros", "alubel",
+                    "amonn", "appiani", "arblu", "bacchi", "bifire",
+                    "bigmat", "boero", "bosch", "colorificiotirreno",
+                    "cvr", "dakota", "delconca", "dewalt", "dorken",
+                    "duramitt", "edilferro", "ediltec", "einhell",
+                    "faraone", "fassabortolo", "fila", "firstcorporation",
+                    "fischer", "fitt", "gattoni", "hidra", "hilti",
+                    "icobit", "imer", "index", "isolmant", "isover",
+                    "itwitaly", "kapriol" , "karcher", "kerakoll", "knauf",
+                    "laticrete", "leca", "madras", "makita", "mapei",
+                    "maurer", "novellini", "oikos", "olympia", "onduline",
+                    "palazzetti", "papillon", "pastorelli", "poron",
+                    "profiltec", "ragno", "raimondi", "sait", "saniplast",
+                    "sanmarco", "schulz", "sika", "soprema", "spit",
+                    "unifix", "unishop", "upower", "ursa", "volteco",
+                    "weber", "yamato"                     
+                    ]
+        
+        filter_dict = _extract_brand_filter(query, known_brands)
+        
+        # Costruisci i search_kwargs
+        search_kwargs = {"k": k} if k is not None else {"k": 5}
+        if filter_dict:
+            search_kwargs["filter"] = filter_dict
+
+        rag_chain = build_rag_chain_wrapper(
+            store, provider, model_name, use_few_shot, max_examples,
+            is_bulk_upload=False,
+            search_kwargs=search_kwargs
+        )
+        
+        output = rag_chain.invoke(query)
+        sources = [{
+            "page": d.metadata.get('page', None),
+            "source_pdf": d.metadata.get('source_pdf', None),
+            "source_file": d.metadata.get('source_file', None),
+            "row_index": d.metadata.get('row_index', None),
+            "content_type": d.metadata.get('content_type', None),
+            "brand": d.metadata.get('brand', 'N/D')
+        } for d in output.get('source_documents', [])]
+        
+        return {
+            "answer": output.get('result'), 
+            "sources": sources
+        }
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Errore durante la query: {error_trace}")
+        return {"error": str(e), "answer": "Si è verificato un errore durante la generazione dell'immagine."}
