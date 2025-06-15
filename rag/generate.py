@@ -177,7 +177,7 @@ def ask_query(query: str, store, provider: str, model_name: str, k: int,
 def ask_query_single_product(query: str, store, provider: str, model_name: str, k: int,
               use_few_shot: bool, max_examples: int):
     """
-    Esegue query RAG per la rigenerazione dell'immagine e della descrizione sul prodotto singolo.
+    Esegue query RAG per la generazione/rigenerazione del prodotto singolo.
     
     Args:
         query: Query utente
@@ -215,7 +215,7 @@ def ask_query_single_product(query: str, store, provider: str, model_name: str, 
         filter_dict = _extract_brand_filter(query, known_brands)
         
         # Costruisci i search_kwargs
-        search_kwargs = {"k": k} if k is not None else {"k": 5}
+        search_kwargs = {"k": k} if k is not None else {"k": 10}
         if filter_dict:
             search_kwargs["filter"] = filter_dict
 
