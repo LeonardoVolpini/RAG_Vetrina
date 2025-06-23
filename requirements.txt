@@ -29,7 +29,7 @@ frozenlist==1.6.0
 fsspec==2025.5.1
 gitdb==4.0.12
 GitPython==3.1.44
-google-ai-generativelanguage==0.6.18
+google-ai-generativelanguage==0.6.15
 google-api-core==2.24.2
 google-api-python-client==2.169.0
 google-auth==2.40.1
@@ -71,7 +71,7 @@ langchain-chroma==0.2.4
 langchain-cli==0.0.36
 langchain-community==0.3.24
 langchain-core==0.3.64
-langchain-google-genai==2.1.4
+langchain-google-genai==2.0.10
 langchain-google-vertexai==2.0.23
 langchain-openai==0.3.16
 langchain-text-splitters==0.3.8

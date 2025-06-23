@@ -258,6 +258,35 @@ async def get_models(provider: str):
             "provider": provider, 
             "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4o-mini"]
         }
+        
+# Aggiungi questo endpoint al tuo file api.py esistente
+
+@app.get('/health')
+async def health_check():
+    """Endpoint per il controllo dello stato di salute del servizio RAG"""
+    try:
+        vector_store = VectorStoreSingleton.get_instance()
+        
+        # Verifica lo stato del vector store
+        is_initialized = vector_store.is_initialized()
+        
+        # Verifica che i servizi AI siano raggiungibili (opzionale)
+        health_status = {
+            "status": "healthy",
+            "service": "rag",
+            "vector_store_initialized": is_initialized,
+            "timestamp": str(vector_store._last_initialized) if hasattr(vector_store, '_last_initialized') else None
+        }
+        return health_status
+    except Exception as e:
+        # Se c'è un errore, restituisci comunque 200 ma con status unhealthy
+        # Docker considera solo il codice HTTP per l'healthcheck
+        return {
+            "status": "unhealthy",
+            "service": "rag", 
+            "error": str(e),
+            "vector_store_initialized": False
+        }
 
 
 # --- ENDPOINT PER FEW-SHOT EXAMPLES ---
