@@ -59,6 +59,7 @@ ehthumbs.db
 
 # Local env files
 .env
+.env.production
 
 .claude
 
